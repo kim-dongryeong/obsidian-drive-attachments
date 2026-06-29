@@ -1,0 +1,18 @@
+# Secrets — NEVER commit (see AGENTS.md hard rules)
+data.json
+**/data.json
+*.token
+.env
+.env.*
+
+# Build output
+dist/
+node_modules/
+main.js
+
+# Autonomous loop — local infra, not part of the project
+auto-loop.sh
+logs/
+
+# OS
+.DS_Store

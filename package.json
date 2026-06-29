@@ -1,0 +1,26 @@
+{
+  "name": "drive-attachments",
+  "version": "0.69.6",
+  "description": "Search Google Drive and insert durable Drive-link notes, and upload dropped files to Drive instead of the vault — with content-hash dedup.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "typecheck": "tsc -noEmit -skipLibCheck"
+  },
+  "keywords": [
+    "obsidian",
+    "google-drive",
+    "attachments"
+  ],
+  "author": "kdr",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.21.5",
+    "obsidian": "^1.5.7",
+    "tslib": "^2.6.3",
+    "typescript": "^5.4.5"
+  }
+}

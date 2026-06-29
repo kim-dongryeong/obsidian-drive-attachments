@@ -1,0 +1,417 @@
+import { requestUrl, type RequestUrlResponse } from "obsidian";
+import { DriveAuthService } from "./driveAuthService";
+import { DRIVE_FOLDER_MIME_TYPE, DrivePickerItem } from "./driveTypes";
+
+const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
+const DRIVE_MULTIPART_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files";
+const DRIVE_UPLOAD_FIELDS = "id,name,mimeType,webViewLink";
+const DRIVE_CREATE_FOLDER_FIELDS = "id";
+const MULTIPART_UPLOAD_LIMIT_BYTES = 5 * 1024 * 1024;
+const RESUMABLE_UPLOAD_CHUNK_BYTES = 5 * 1024 * 1024;
+
+export interface DriveUploadInput {
+  name: string;
+  mimeType: string;
+  data: ArrayBuffer;
+  parentFolderId?: string;
+  allowRootFallback?: boolean;
+}
+
+export interface DriveUploadResult {
+  item: DrivePickerItem;
+  usedRootFallback: boolean;
+}
+
+export class DriveUploadService {
+  constructor(private readonly auth: DriveAuthService) {}
+
+  async uploadFile(input: DriveUploadInput): Promise<DriveUploadResult> {
+    const accessToken = await this.auth.getAccessToken();
+    const firstAttempt = await this.uploadBySize(input, accessToken);
+
+    // Re-upload to Drive root ONLY when the 403 specifically says the picked folder is not
+    // writable under drive.file (Spike 1b). A quota / rate-limit / insufficient-scope 403 would
+    // fail at root too, so retrying there just re-uploads the whole file a second time for nothing
+    // — surface the mapped error from parseUploadedDriveItem instead.
+    if (input.allowRootFallback !== false && input.parentFolderId && isFolderPermissionDenied(firstAttempt)) {
+      const fallbackAttempt = await this.uploadBySize({ ...input, parentFolderId: undefined }, accessToken);
+      return { item: parseUploadedDriveItem(fallbackAttempt), usedRootFallback: true };
+    }
+
+    return { item: parseUploadedDriveItem(firstAttempt), usedRootFallback: false };
+  }
+
+  async createFolder(name: string, parentFolderId?: string): Promise<string> {
+    const accessToken = await this.auth.getAccessToken();
+    const metadata: Record<string, unknown> = {
+      name,
+      mimeType: DRIVE_FOLDER_MIME_TYPE,
+    };
+    if (parentFolderId) {
+      metadata.parents = [parentFolderId];
+    }
+
+    const url = new URL(DRIVE_FILES_URL);
+    url.searchParams.set("fields", DRIVE_CREATE_FOLDER_FIELDS);
+    url.searchParams.set("supportsAllDrives", "true");
+
+    const response = await requestUrl({
+      url: url.toString(),
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json; charset=UTF-8",
+      },
+      body: JSON.stringify(metadata),
+      throw: false,
+    });
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(getUploadErrorMessage(response));
+    }
+
+    return parseCreatedFolderId(response);
+  }
+
+  private async uploadBySize(input: DriveUploadInput, accessToken: string): Promise<RequestUrlResponse> {
+    if (input.data.byteLength <= MULTIPART_UPLOAD_LIMIT_BYTES) {
+      return this.uploadMultipart(input, accessToken);
+    }
+    return this.uploadResumable(input, accessToken);
+  }
+
+  private async uploadMultipart(input: DriveUploadInput, accessToken: string): Promise<RequestUrlResponse> {
+    const boundary = `gdab_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+    const body = buildMultipartBody(input, boundary);
+    const url = new URL(DRIVE_MULTIPART_UPLOAD_URL);
+    url.searchParams.set("uploadType", "multipart");
+    url.searchParams.set("fields", DRIVE_UPLOAD_FIELDS);
+    url.searchParams.set("supportsAllDrives", "true");
+
+    // Do NOT set Content-Length manually: Obsidian `requestUrl` (Electron's net) computes it from the
+    // body and rejects a manual Content-Length with `net::ERR_INVALID_ARGUMENT`.
+    return requestUrl({
+      url: url.toString(),
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+      },
+      body,
+      throw: false,
+    });
+  }
+
+  private async uploadResumable(input: DriveUploadInput, accessToken: string): Promise<RequestUrlResponse> {
+    const sessionResponse = await this.createResumableSession(input, accessToken);
+    if (sessionResponse.status < 200 || sessionResponse.status >= 300) {
+      return sessionResponse;
+    }
+
+    const sessionUrl = getHeaderValue(sessionResponse.headers, "location");
+    if (!sessionUrl) {
+      throw new Error("Google Drive did not return a resumable upload session URL.");
+    }
+
+    let offset = 0;
+    let lastResponse = sessionResponse;
+    while (offset < input.data.byteLength) {
+      const nextOffset = Math.min(offset + RESUMABLE_UPLOAD_CHUNK_BYTES, input.data.byteLength);
+      const chunk = input.data.slice(offset, nextOffset);
+      lastResponse = await requestUrl({
+        url: sessionUrl,
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": input.mimeType || "application/octet-stream",
+          // No manual Content-Length (Electron computes it; a manual one => net::ERR_INVALID_ARGUMENT).
+          "Content-Range": `bytes ${offset}-${nextOffset - 1}/${input.data.byteLength}`,
+        },
+        body: chunk,
+        throw: false,
+      });
+
+      if (lastResponse.status === 308) {
+        // Drive's 308 "Resume Incomplete" reports the last byte it actually stored via a
+        // `Range: bytes=0-N` header; advance to exactly N+1 so a partial acknowledgment never leaves a
+        // gap the next Content-Range would skip. A 308 with no readable Range is the anomalous case —
+        // a full ack of a non-final chunk includes Range, and the final chunk returns 200/201, not 308
+        // — so resuming at the chunk end here is optimistic, assuming requestUrl just didn't surface a
+        // Range that Drive sent. If a live >5 MB test shows requestUrl drops the 308 Range header, the
+        // safe fix is to treat absent-Range as no progress (throw -> local-save fallback) rather than
+        // risk skipping unstored bytes. See worklog Turn 44 (needs kdr's live confirmation).
+        const acknowledgedEnd = parseResumableRangeEnd(lastResponse.headers);
+        if (acknowledgedEnd !== null && acknowledgedEnd >= nextOffset) {
+          // The chunk we just sent covers bytes [offset, nextOffset - 1], so the largest byte Drive
+          // could legitimately have stored is `nextOffset - 1`. An ack at `nextOffset` or beyond claims
+          // a byte we never uploaded — an impossible/mismatched Range header. Do not trust it (trusting
+          // it would skip unstored bytes and corrupt the file); throw -> DropController local-save.
+          throw new Error("Google Drive resumable upload returned an invalid byte acknowledgment.");
+        }
+        const resumeFrom = acknowledgedEnd === null ? nextOffset : acknowledgedEnd + 1;
+        if (resumeFrom <= offset) {
+          // No forward progress — Drive acknowledged nothing past where we already were. Bail with an
+          // actionable error instead of re-sending the same range forever.
+          throw new Error("Google Drive resumable upload stalled: the last chunk was not acknowledged.");
+        }
+        offset = resumeFrom;
+        continue;
+      }
+
+      // Any non-308 status ends the loop: a 2xx carries the created file JSON, while an error status
+      // is returned as-is so parseUploadedDriveItem maps it to an actionable message.
+      return lastResponse;
+    }
+
+    return lastResponse;
+  }
+
+  private async createResumableSession(input: DriveUploadInput, accessToken: string): Promise<RequestUrlResponse> {
+    const metadata: Record<string, unknown> = {
+      name: input.name,
+    };
+    if (input.mimeType) {
+      metadata.mimeType = input.mimeType;
+    }
+    if (input.parentFolderId) {
+      metadata.parents = [input.parentFolderId];
+    }
+
+    const url = new URL(DRIVE_MULTIPART_UPLOAD_URL);
+    url.searchParams.set("uploadType", "resumable");
+    url.searchParams.set("fields", DRIVE_UPLOAD_FIELDS);
+    url.searchParams.set("supportsAllDrives", "true");
+
+    return requestUrl({
+      url: url.toString(),
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Type": input.mimeType || "application/octet-stream",
+        "X-Upload-Content-Length": String(input.data.byteLength),
+      },
+      body: JSON.stringify(metadata),
+      throw: false,
+    });
+  }
+}
+
+function buildMultipartBody(input: DriveUploadInput, boundary: string): ArrayBuffer {
+  const metadata: Record<string, unknown> = {
+    name: input.name,
+  };
+  if (input.mimeType) {
+    metadata.mimeType = input.mimeType;
+  }
+  if (input.parentFolderId) {
+    metadata.parents = [input.parentFolderId];
+  }
+
+  const encoder = new TextEncoder();
+  const metadataPart = encoder.encode([
+    `--${boundary}`,
+    "Content-Type: application/json; charset=UTF-8",
+    "",
+    JSON.stringify(metadata),
+    `--${boundary}`,
+    `Content-Type: ${input.mimeType || "application/octet-stream"}`,
+    "",
+    "",
+  ].join("\r\n"));
+  const filePart = new Uint8Array(input.data);
+  const closingPart = encoder.encode(`\r\n--${boundary}--\r\n`);
+
+  const body = new Uint8Array(metadataPart.byteLength + filePart.byteLength + closingPart.byteLength);
+  body.set(metadataPart, 0);
+  body.set(filePart, metadataPart.byteLength);
+  body.set(closingPart, metadataPart.byteLength + filePart.byteLength);
+  return body.buffer;
+}
+
+function parseUploadedDriveItem(response: RequestUrlResponse): DrivePickerItem {
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(getUploadErrorMessage(response));
+  }
+
+  if (!response.text) {
+    throw new Error("Google Drive returned an empty upload response.");
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(response.text);
+  } catch {
+    throw new Error("Google Drive returned an unreadable upload response.");
+  }
+
+  if (!isUploadedDriveItem(parsed)) {
+    throw new Error("Google Drive upload response was missing required fields.");
+  }
+
+  return parsed;
+}
+
+function parseCreatedFolderId(response: RequestUrlResponse): string {
+  if (!response.text) {
+    throw new Error("Google Drive returned an empty folder-create response.");
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(response.text);
+  } catch {
+    throw new Error("Google Drive returned an unreadable folder-create response.");
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Google Drive folder-create response was missing the folder ID.");
+  }
+
+  const id = (parsed as { id?: unknown }).id;
+  if (!isNonEmptyString(id)) {
+    throw new Error("Google Drive folder-create response was missing the folder ID.");
+  }
+
+  return id;
+}
+
+function isUploadedDriveItem(value: unknown): value is DrivePickerItem {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<DrivePickerItem>;
+  return (
+    isNonEmptyString(candidate.id) &&
+    isNonEmptyString(candidate.name) &&
+    isNonEmptyString(candidate.mimeType) &&
+    isNonEmptyString(candidate.webViewLink)
+  );
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function getHeaderValue(headers: Record<string, string>, name: string): string | null {
+  const lowerName = name.toLowerCase();
+  for (const [headerName, value] of Object.entries(headers)) {
+    if (headerName.toLowerCase() === lowerName && value.trim().length > 0) {
+      return value;
+    }
+  }
+  return null;
+}
+
+// Parse the inclusive last-stored byte index from a resumable 308's `Range: bytes=0-N` header.
+// Drive reports stored bytes from zero for this upload protocol; any other shape is treated as
+// unusable so the caller falls back to the normal full-chunk acknowledgment path.
+function parseResumableRangeEnd(headers: Record<string, string>): number | null {
+  const range = getHeaderValue(headers, "range");
+  if (!range) {
+    return null;
+  }
+  const match = /^\s*bytes=0-(\d+)\s*$/i.exec(range);
+  if (!match) {
+    return null;
+  }
+  const end = Number(match[1]);
+  return Number.isSafeInteger(end) ? end : null;
+}
+
+interface GoogleDriveErrorBody {
+  error?: {
+    code?: number;
+    message?: string;
+    errors?: Array<{
+      reason?: string;
+      message?: string;
+    }>;
+  };
+}
+
+// True ONLY for the drive.file "you may not write into this folder" 403 — the Spike 1b case the
+// root fallback exists for. Deliberately narrow: a quota / rate-limit 403 (storageQuotaExceeded,
+// rateLimitExceeded, …) or an insufficient-scope 403 (reason `insufficientPermissions`, which does
+// not contain "file") carries a different reason/message and must NOT trigger a wasteful re-upload
+// at root, where it would fail again for the same reason.
+function isFolderPermissionDenied(response: RequestUrlResponse): boolean {
+  if (response.status !== 403) {
+    return false;
+  }
+  const { reason, message } = parseDriveError(response);
+  return (
+    reason.toLowerCase().includes("insufficientfilepermissions") ||
+    message.toLowerCase().includes("does not have sufficient permission")
+  );
+}
+
+// Mirror the Drive index error mapping so a failed upload tells the user what to do
+// (reconnect / wait out a quota / fix folder access) instead of a bare HTTP code. A future cleanup
+// could extract these Drive-error helpers into a shared module reused by index + upload.
+function getUploadErrorMessage(response: RequestUrlResponse): string {
+  const { reason, message } = parseDriveError(response);
+  const lowerReason = reason.toLowerCase();
+  const lowerMessage = message.toLowerCase();
+
+  if (response.status === 401) {
+    return "Google Drive upload needs reconnecting. Connect to Google Drive again, then retry.";
+  }
+
+  if (response.status === 429 || (response.status === 403 && isQuotaOrRateLimitError(lowerReason, lowerMessage))) {
+    return "Google Drive upload is temporarily rate-limited or over your storage quota. Wait a bit, then retry.";
+  }
+
+  if (response.status === 403) {
+    return "Google Drive denied the upload. Check Drive access and the upload folder, reconnect if needed, then retry.";
+  }
+
+  return `Google Drive upload failed with HTTP ${response.status}. Retry in a moment; reconnect if it keeps failing.`;
+}
+
+function parseDriveError(response: RequestUrlResponse): { reason: string; message: string } {
+  const body = parseDriveErrorBody(response);
+  const firstError = body?.error?.errors?.[0];
+  return {
+    reason: firstError?.reason ?? "",
+    message: firstError?.message ?? body?.error?.message ?? "",
+  };
+}
+
+function parseDriveErrorBody(response: RequestUrlResponse): GoogleDriveErrorBody | null {
+  // Parse from `response.text`, never `response.json`: Obsidian's `json` getter runs JSON.parse
+  // lazily and THROWS on a non-JSON body (an HTML 502/504 from a proxy, an empty body), which would
+  // replace our mapped message with a raw SyntaxError. Keep JSON.parse inside this try/catch.
+  if (!response.text) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(response.text);
+    return isGoogleDriveErrorBody(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function isGoogleDriveErrorBody(value: unknown): value is GoogleDriveErrorBody {
+  if (!value || typeof value !== "object" || !("error" in value)) {
+    return false;
+  }
+  const error = (value as GoogleDriveErrorBody).error;
+  return !error || typeof error === "object";
+}
+
+function isQuotaOrRateLimitError(reason: string, message: string): boolean {
+  // Drive's 403 quota/rate reasons: rateLimitExceeded, userRateLimitExceeded,
+  // sharingRateLimitExceeded ("ratelimit"), quotaExceeded / storageQuotaExceeded ("quota"),
+  // and dailyLimitExceeded ("dailylimit", which the others don't contain).
+  return (
+    reason.includes("ratelimit") ||
+    reason.includes("quota") ||
+    reason.includes("dailylimit") ||
+    message.includes("rate limit") ||
+    message.includes("quota") ||
+    message.includes("daily limit")
+  );
+}

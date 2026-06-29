@@ -1,0 +1,3676 @@
+/*
+ * Drive Attachment Bridge — styling for the Drive search modal result rows and the
+ * upload-dedup modal. Obsidian auto-loads this file (alongside manifest.json + main.js)
+ * from the plugin folder. Uses Obsidian CSS variables so it follows the active theme.
+ *
+ * Markup (see src/driveSearchModal.ts → renderSuggestion):
+ *   .gdab-drive-search-result            row container
+ *     .gdab-drive-search-result-main     text column
+ *       .gdab-drive-search-result-name   name      — default text, with .gdab-search-hl spans
+ *       .gdab-drive-search-result-hint   type      — smaller, muted
+ *       .gdab-drive-search-result-path   path      — smaller, muted, monospace
+ *     .gdab-drive-search-result-actions  right-side row actions
+ */
+
+.gdab-drive-search-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.gdab-drive-search-result-main {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.gdab-drive-search-result-name {
+  /* name renders at the default suggestion size/color */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.gdab-drive-search-result-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  opacity: 0;
+}
+
+.suggestion-item:hover .gdab-drive-search-result-actions,
+.suggestion-item:focus-within .gdab-drive-search-result-actions,
+.gdab-drive-search-result-actions:focus-within {
+  opacity: 1;
+}
+
+.gdab-drive-search-result-action {
+  --icon-size: 16px;
+  color: var(--text-muted);
+}
+
+.gdab-search-hl {
+  background-color: var(--text-highlight-bg, rgba(255, 208, 0, 0.28));
+  color: inherit;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px var(--text-highlight-bg, rgba(255, 208, 0, 0.28));
+}
+
+.gdab-search-hl-0 {
+  background-color: rgba(255, 214, 10, 0.35);
+  box-shadow: 0 0 0 1px rgba(255, 214, 10, 0.22);
+}
+
+.gdab-search-hl-1 {
+  background-color: rgba(0, 184, 217, 0.24);
+  box-shadow: 0 0 0 1px rgba(0, 184, 217, 0.18);
+}
+
+.gdab-search-hl-2 {
+  background-color: rgba(255, 99, 132, 0.24);
+  box-shadow: 0 0 0 1px rgba(255, 99, 132, 0.18);
+}
+
+.gdab-search-hl-3 {
+  background-color: rgba(76, 175, 80, 0.24);
+  box-shadow: 0 0 0 1px rgba(76, 175, 80, 0.18);
+}
+
+.gdab-search-hl-4 {
+  background-color: rgba(171, 71, 188, 0.22);
+  box-shadow: 0 0 0 1px rgba(171, 71, 188, 0.16);
+}
+
+.gdab-search-hl-5 {
+  background-color: rgba(255, 152, 0, 0.26);
+  box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.18);
+}
+
+.theme-dark .gdab-search-hl-0 {
+  background-color: rgba(255, 214, 10, 0.28);
+  box-shadow: 0 0 0 1px rgba(255, 214, 10, 0.18);
+}
+
+.theme-dark .gdab-search-hl-1 {
+  background-color: rgba(77, 208, 225, 0.28);
+  box-shadow: 0 0 0 1px rgba(77, 208, 225, 0.18);
+}
+
+.theme-dark .gdab-search-hl-2 {
+  background-color: rgba(255, 128, 171, 0.28);
+  box-shadow: 0 0 0 1px rgba(255, 128, 171, 0.18);
+}
+
+.theme-dark .gdab-search-hl-3 {
+  background-color: rgba(129, 199, 132, 0.26);
+  box-shadow: 0 0 0 1px rgba(129, 199, 132, 0.18);
+}
+
+.theme-dark .gdab-search-hl-4 {
+  background-color: rgba(206, 147, 216, 0.28);
+  box-shadow: 0 0 0 1px rgba(206, 147, 216, 0.18);
+}
+
+.theme-dark .gdab-search-hl-5 {
+  background-color: rgba(255, 183, 77, 0.28);
+  box-shadow: 0 0 0 1px rgba(255, 183, 77, 0.18);
+}
+
+.gdab-drive-search-result-hint {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.gdab-drive-search-result-hint.has-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gdab-drive-search-result-icon {
+  display: inline-flex;
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+}
+
+.gdab-drive-search-result-icon svg {
+  width: 1em;
+  height: 1em;
+  stroke-width: 2;
+}
+
+.gdab-custom-file-icon-img {
+  display: inline-block;
+  width: var(--gdab-custom-icon-size, 20px);
+  height: var(--gdab-custom-icon-size, 20px);
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.gdab-drive-search-result-hint.gdab-type-sheet {
+  color: #188038;
+}
+
+.gdab-drive-search-result-hint.gdab-type-doc {
+  color: #1a73e8;
+}
+
+.gdab-drive-search-result-hint.gdab-type-slides {
+  color: #f9ab00;
+}
+
+.gdab-drive-search-result-hint.gdab-type-form {
+  color: #7248b9;
+}
+
+.gdab-drive-search-result-hint.gdab-type-pdf {
+  color: #d93025;
+}
+
+.gdab-drive-search-result-hint.gdab-type-image {
+  color: #00897b;
+}
+
+.gdab-drive-search-result-hint.gdab-type-audio {
+  color: #c26401;
+}
+
+.gdab-drive-search-result-hint.gdab-type-video {
+  color: #c5221f;
+}
+
+.gdab-drive-search-result-hint.gdab-type-folder {
+  color: #f9ab00;
+}
+
+.gdab-drive-search-result-hint.gdab-type-file {
+  color: #5f7285;
+}
+
+.theme-dark .gdab-drive-search-result-hint.gdab-type-sheet {
+  color: #81c995;
+}
+
+.theme-dark .gdab-drive-search-result-hint.gdab-type-doc {
+  color: #8ab4f8;
+}
+
+.theme-dark .gdab-drive-search-result-hint.gdab-type-slides {
+  color: #fdd663;
+}
+
+.theme-dark .gdab-drive-search-result-hint.gdab-type-form {
+  color: #c58af9;
+}
+
+.theme-dark .gdab-drive-search-result-hint.gdab-type-pdf {
+  color: #f28b82;
+}
+
+.theme-dark .gdab-drive-search-result-hint.gdab-type-image {
+  color: #80cbc4;
+}
+
+.theme-dark .gdab-drive-search-result-hint.gdab-type-audio {
+  color: #fbbc04;
+}
+
+.theme-dark .gdab-drive-search-result-hint.gdab-type-video {
+  color: #ff8a80;
+}
+
+.theme-dark .gdab-drive-search-result-hint.gdab-type-folder {
+  color: #fdd663;
+}
+
+.theme-dark .gdab-drive-search-result-hint.gdab-type-file {
+  color: #9aa9b8;
+}
+
+.gdab-drive-search-result-path {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-family: var(--font-monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * Upload-dedup modal (see src/driveDedupModal.ts → onOpen):
+ *   .gdab-dedup-names          label/value grid for the two file names
+ *     .gdab-dedup-name-label   "Uploading" / "Existing in Drive" — fixed-width left column
+ *     .gdab-dedup-name-value   the names — monospace, left-aligned, one per row
+ *   .gdab-dedup-verdict        shared verdict chip (.is-same green / .is-different warning)
+ *     .gdab-dedup-name-verdict "✓ same name" / "⚠ different name" — sits in the names grid
+ *     .gdab-dedup-md5-verdict  "✓ same md5" + raw hash (.gdab-dedup-md5-hash) — always .is-same,
+ *                              since a dedup hit only exists when the md5 matched
+ *   .gdab-dedup-details        md5 / match-source / Drive-path / size / vault-note lines
+ *   .gdab-dedup-buttons        action button row
+ */
+
+.gdab-dedup-names {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 12px;
+  row-gap: 2px;
+  align-items: baseline;
+  margin-top: 12px;
+}
+
+.gdab-dedup-name-label {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.gdab-dedup-name-value {
+  font-family: var(--font-monospace);
+  /* long Drive names wrap inside the modal instead of stretching it */
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.gdab-dedup-verdict {
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+}
+
+.gdab-dedup-verdict.is-same {
+  color: var(--text-success);
+}
+
+.gdab-dedup-verdict.is-different {
+  color: var(--text-warning);
+}
+
+.gdab-dedup-name-verdict {
+  grid-column: 2;
+  margin-top: 2px;
+}
+
+/* the raw hash stays readable but doesn't compete with the green marker */
+.gdab-dedup-md5-hash {
+  margin-left: 6px;
+  font-family: var(--font-monospace);
+  font-weight: 400;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.gdab-dedup-details {
+  margin-top: 12px;
+  white-space: pre-wrap;
+}
+
+.gdab-dedup-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/*
+ * Settings tab (see src/settingsTab.ts → appendUploadFolderPath):
+ *   .gdab-upload-folder-path   resolved Drive path under "Default upload folder" — appended
+ *                              async inside the setting description, so it inherits the muted
+ *                              description color; monospace + ellipsis like the search path rows.
+ */
+
+.gdab-upload-folder-path {
+  font-size: var(--font-ui-smaller);
+  font-family: var(--font-monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * Settings tab (see src/settingsTab.ts → "Link insertion" section):
+ *   .gdab-setting-disabled   note-location rows when inline links are selected — Setting.setDisabled
+ *                            only disables the input components, so this greys the whole row (name +
+ *                            description) to read as inactive-but-discoverable (kdr prefers disabled
+ *                            over hidden).
+ */
+
+.gdab-setting-disabled {
+  opacity: 0.6;
+}
+
+.gdab-drop-file-summary {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Local attachment migration preview (see src/migrateNoteAttachments.ts):
+ * a dry-run-only table-like list. The later execution turn will reuse this surface before
+ * upload/relink/delete work starts.
+ */
+
+.gdab-migrate-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.gdab-migrate-preview-item {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.gdab-migrate-preview-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.gdab-migrate-preview-path {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-family: var(--font-monospace);
+  overflow-wrap: anywhere;
+}
+
+.gdab-migrate-preview-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 4px 12px;
+  margin-top: 8px;
+  font-size: var(--font-ui-smaller);
+}
+
+.gdab-migrate-preview-refs {
+  margin-top: 8px;
+}
+
+.gdab-migrate-preview-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/*
+ * Drive preview code block (see src/drivePreviewService.ts):
+ *   .gdab-drive-preview                 outer Markdown processor container
+ *   .gdab-drive-preview-image           fetched image bytes rendered as a data URL
+ *   .gdab-drive-preview-pdf             fetched PDF bytes rendered as a data URL
+ *   .gdab-drive-preview-thumbnail       thumbnail fallback for oversized / non-image files
+ *   .gdab-drive-preview-card            muted "Open in Drive" fallback
+ */
+
+.gdab-drive-preview {
+  margin: 0.75em 0;
+}
+
+/* Our preview is a code-block processor, so Obsidian wraps it in the SAME framed container it gives a
+   dataviewjs block — a border/background + a hover "edit-block" button. Neutralize that wrapper so only
+   the media shows (reading view + Live Preview). */
+.markdown-rendered .block-language-drive-preview {
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+}
+.block-language-drive-preview .edit-block-button {
+  display: none !important;
+}
+.markdown-source-view .cm-embed-block:has(.block-language-drive-preview),
+.markdown-source-view .cm-embed-block:has(.block-language-drive-preview):hover {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* Same neutralization for the drive-actions block (drop Obsidian's code-block-result box). */
+.markdown-rendered .block-language-drive-actions {
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+}
+.block-language-drive-actions .edit-block-button {
+  display: none !important;
+}
+.markdown-source-view .cm-embed-block:has(.block-language-drive-actions),
+.markdown-source-view .cm-embed-block:has(.block-language-drive-actions):hover {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* While dragging the resize handle, let pointer events pass through the media (esp. the PDF iframe)
+   to the captured handle. */
+.gdab-drive-preview-frame.gdab-resizing .gdab-drive-preview-pdf,
+.gdab-drive-preview-frame.gdab-resizing .gdab-drive-preview-video,
+.gdab-drive-preview-frame.gdab-resizing .gdab-drive-preview-image {
+  pointer-events: none;
+}
+
+.gdab-drive-preview.gdab-drive-preview-has-media {
+  /* block (not table/fit-content): the inner frame's `width: min(100%, var)` then resolves `100%`
+     against the full editor width, so a PDF iframe (intrinsic 300px) can GROW to the set width — a
+     fit-content wrapper collapsed to the iframe's intrinsic and capped the width. */
+  display: block;
+  max-width: 100%;
+}
+
+/* Frame wraps the media + a resize handle and caps the width/height. Default to a medium size, not
+   the full content width; override per block with `width:` / `height:` lines, or drag the handle. */
+.gdab-drive-preview-frame {
+  position: relative;
+  display: inline-block;
+  /* explicit width (not just max-width) so dragging the handle can GROW past the default, not only
+     shrink; still capped at the available content width. */
+  width: min(100%, var(--gdab-preview-max-width, 480px));
+  line-height: 0;
+}
+
+.gdab-drive-preview-image,
+.gdab-drive-preview-video {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.gdab-drive-preview-thumbnail {
+  display: block;
+  max-width: min(100%, var(--gdab-preview-max-width, 480px));
+  height: auto;
+  border-radius: 6px;
+}
+
+.gdab-drive-preview-pdf {
+  display: block;
+  width: 100%;
+  height: var(--gdab-preview-height, min(55vh, 420px));
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+}
+
+/* Bottom-right drag-to-resize grip, revealed on hover. */
+.gdab-drive-preview-handle {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--background-modifier-border-hover, var(--background-modifier-border));
+  border: 1px solid var(--background-modifier-border);
+  cursor: nwse-resize;
+  opacity: 0;
+  touch-action: none;
+}
+
+.gdab-drive-preview-frame:hover .gdab-drive-preview-handle {
+  opacity: 0.85;
+}
+
+/* "Open Drive-link note" / "convert to wikilink" affordances — kept quiet so the media reads clean. */
+.gdab-drive-preview-note-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.gdab-drive-preview-note-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+/* On the fallback card (pptx/HEIC/oversized) the toolbar is a visible row, not a hover overlay. */
+.gdab-drive-preview-fallback-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* The card's generic `a` rule (inline-block, margin-top) bleeds onto the toolbar icon links and
+   breaks their flex centering — re-assert it for icons inside the card's action row. */
+.gdab-drive-preview-fallback-actions .gdab-drive-preview-note-icon {
+  display: flex;
+  margin-top: 0;
+}
+
+.gdab-drive-preview-note-icon:hover {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.gdab-drive-preview-note-icon.is-warning:hover {
+  background: var(--color-red, #c0392b);
+}
+
+.gdab-drive-preview-note-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Turn the (reliably-rendering) horizontal ellipsis into a vertical kebab — see EmbedAction.rotate. */
+.gdab-drive-preview-note-icon.gdab-rotate-90 svg {
+  transform: rotate(90deg);
+}
+
+.gdab-drive-preview-frame:hover .gdab-drive-preview-note-actions,
+.gdab-drive-preview-note-actions:focus-within {
+  opacity: 0.9;
+}
+
+/* Trashed/deleted state badge over an embed */
+.gdab-drive-preview-deleted-badge {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  /* The media frame sets line-height:0, which would otherwise flatten this chip to a thin strip. */
+  line-height: 1.5;
+  white-space: nowrap;
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  color: #fff;
+}
+
+/* On a media frame, overlay the badge in the top-left corner instead of sitting beside it. */
+.gdab-drive-preview-deleted-badge.is-overlay {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  margin-bottom: 0;
+  z-index: 1;
+}
+
+.gdab-drive-preview-deleted-badge.is-trashed {
+  background: var(--color-orange, #e08000);
+}
+
+.gdab-drive-preview-deleted-badge.is-deleted {
+  background: var(--color-red, #c0392b);
+}
+
+/* Absolute overlay (bottom-left pill) so the caption never pushes the note's content down. */
+.gdab-drive-preview-note-caption {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  max-width: calc(100% - 12px);
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+/* Video: anchor the caption at the top so it never covers the playback controls (bottom). */
+.gdab-drive-preview-note-caption.is-top {
+  top: 6px;
+  bottom: auto;
+}
+
+.gdab-drive-preview-frame:hover .gdab-drive-preview-note-caption,
+.gdab-drive-preview-note-caption:focus-within {
+  opacity: 1;
+}
+
+.gdab-drive-preview-note-caption a {
+  color: #fff;
+  font-size: var(--font-ui-smaller);
+  pointer-events: auto;
+}
+
+.gdab-drive-preview-thumbnail-link {
+  display: inline-block;
+  max-width: 100%;
+  margin-bottom: 8px;
+}
+
+.gdab-drive-preview-card {
+  /* shrink-wrap so a non-previewable file's info box (pptx etc.) isn't full editor width when
+     readable-line-length is off. */
+  width: fit-content;
+  max-width: min(100%, 480px);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+}
+
+.gdab-drive-preview-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* View mode 2: type-icon + filename label under a previewable embed (caption: on). */
+.gdab-drive-preview-filename {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Colored file-type icon before the filename on the non-preview card / the view-mode-2 label. */
+.gdab-drive-preview-card-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.gdab-drive-preview-card-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.gdab-drive-preview-card-mime,
+.gdab-drive-preview-card-detail,
+.gdab-drive-preview-status {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.gdab-drive-preview-card a {
+  display: inline-block;
+  margin-top: 8px;
+}
+
+/*
+ * Drive sidebar panel (see src/drivePanelView.ts):
+ *   .gdab-drive-panel                 ItemView root
+ *   .gdab-drive-panel-header          title + back/forward/up/refresh controls
+ *   .gdab-drive-panel-roots           My Drive / shared-drive root selector
+ *   .gdab-drive-panel-breadcrumbs     current folder path
+ *   .gdab-drive-panel.is-drop-target  active local-file drop target
+ *   .gdab-drive-panel-row             compact Drive file/folder rows
+ *   .gdab-drive-panel-row-actions     hover-revealed per-row actions (file: insert link / note / preview; folder: attach)
+ */
+
+.gdab-drive-panel {
+  /* Theme tokens — every panel component reads these via var(--gdab-*, <obsidian fallback>). The
+     defaults below reproduce today's Obsidian-native look, so `gdab-theme-default` stays unchanged;
+     each `.gdab-theme-<name>` block overrides a subset to reskin the whole panel (CSS-only, no DOM
+     changes). Selection fills derive from --gdab-accent-rgb, so overriding the accent cascades. */
+  --gdab-accent: var(--interactive-accent);
+  --gdab-accent-hover: var(--interactive-accent-hover);
+  --gdab-accent-rgb: var(--interactive-accent-rgb);
+  --gdab-on-accent: var(--text-on-accent);
+  --gdab-surface: transparent;
+  --gdab-grid-card: transparent;
+  --gdab-row-hover: var(--background-modifier-hover);
+  --gdab-row-selected: rgba(var(--gdab-accent-rgb), 0.16);
+  --gdab-row-selected-ring: rgba(var(--gdab-accent-rgb), 0.36);
+  --gdab-row-radius: 6px;
+  --gdab-divider: var(--background-modifier-border);
+  --gdab-divider-hover: var(--background-modifier-border-hover, var(--background-modifier-border));
+  --gdab-text: var(--text-normal);
+  --gdab-text-muted: var(--text-muted);
+  --gdab-text-faint: var(--text-faint);
+  --gdab-danger: var(--text-error);
+  --gdab-starred: var(--color-yellow);
+  --gdab-control-surface: var(--background-modifier-form-field, var(--background-secondary));
+  --gdab-secondary-surface: var(--background-secondary);
+  --gdab-primary-surface: var(--background-primary);
+  --gdab-control-active: var(--background-modifier-active-hover, var(--background-modifier-hover));
+  --gdab-control-radius: var(--radius-s, 6px);
+  --gdab-bar-radius: 6px;
+  --gdab-thumbnail-radius: 5px;
+  --gdab-skeleton-base: var(--background-modifier-border);
+  --gdab-skeleton-sheen: var(--background-modifier-hover);
+  --gdab-scrollbar-track: transparent;
+  --gdab-scrollbar-thumb: var(--scrollbar-thumb-bg);
+  --gdab-scrollbar-thumb-hover: var(--scrollbar-active-thumb-bg);
+  --gdab-font: var(--font-interface);
+  --gdab-title-font: var(--font-interface);
+  --gdab-letter-spacing: normal;
+  --gdab-gap: 8px;
+
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gdab-gap, 8px);
+  padding: 8px;
+  overflow: hidden;
+  background: var(--gdab-surface, transparent);
+  font-family: var(--gdab-font, var(--font-interface));
+}
+
+/* ============================================================================
+   Panel themes — each `.gdab-theme-<name>` block overrides a subset of the
+   tokens above (plus a few bespoke rules) to reskin the whole panel. Only one
+   theme class is present at a time (render() swaps `gdab-theme-*`), so token
+   order between blocks is irrelevant; they only need to follow the defaults.
+   ============================================================================ */
+
+/* === Terminal-style color schemes (à la iTerm2 / Oh My Zsh) — fixed self-contained palettes,
+   so they keep their look regardless of Obsidian's light/dark mode (no .theme-dark variant). === */
+
+/* --- Dracula: deep indigo surface, vampire-purple accent. --- */
+.gdab-theme-dracula {
+  --gdab-accent: #bd93f9; --gdab-accent-hover: #caa9fa; --gdab-accent-rgb: 189, 147, 249; --gdab-on-accent: #282a36;
+  --gdab-surface: #282a36; --gdab-secondary-surface: #21222c; --gdab-primary-surface: #1e1f29;
+  --gdab-grid-card: #343746; --gdab-control-surface: #343746; --gdab-control-active: #44475a;
+  --gdab-text: #f8f8f2; --gdab-text-muted: rgba(248, 248, 242, 0.62); --gdab-text-faint: rgba(248, 248, 242, 0.38);
+  --gdab-row-hover: rgba(255, 255, 255, 0.05); --gdab-row-selected: rgba(189, 147, 249, 0.20); --gdab-row-selected-ring: rgba(189, 147, 249, 0.45);
+  --gdab-divider: rgba(248, 248, 242, 0.10); --gdab-divider-hover: rgba(248, 248, 242, 0.18);
+  --gdab-chip-active-hover: rgba(189, 147, 249, 0.22); --gdab-chip-active-border: rgba(189, 147, 249, 0.40);
+  --gdab-starred: #f1fa8c; --gdab-danger: #ff5555;
+  --gdab-skeleton-base: #343746; --gdab-skeleton-sheen: #44475a;
+  --gdab-scrollbar-thumb: rgba(189, 147, 249, 0.32); --gdab-scrollbar-thumb-hover: rgba(189, 147, 249, 0.55);
+  color: var(--gdab-text); -webkit-font-smoothing: antialiased;
+}
+
+/* --- Nord: arctic, bluish polar night + frost cyan accent. --- */
+.gdab-theme-nord {
+  --gdab-accent: #88c0d0; --gdab-accent-hover: #8fbcbb; --gdab-accent-rgb: 136, 192, 208; --gdab-on-accent: #2e3440;
+  --gdab-surface: #2e3440; --gdab-secondary-surface: #2b313c; --gdab-primary-surface: #272c35;
+  --gdab-grid-card: #3b4252; --gdab-control-surface: #3b4252; --gdab-control-active: #434c5e;
+  --gdab-text: #eceff4; --gdab-text-muted: rgba(216, 222, 233, 0.74); --gdab-text-faint: rgba(216, 222, 233, 0.44);
+  --gdab-row-hover: rgba(236, 239, 244, 0.05); --gdab-row-selected: rgba(136, 192, 208, 0.20); --gdab-row-selected-ring: rgba(136, 192, 208, 0.45);
+  --gdab-divider: rgba(216, 222, 233, 0.10); --gdab-divider-hover: rgba(216, 222, 233, 0.18);
+  --gdab-chip-active-hover: rgba(136, 192, 208, 0.22); --gdab-chip-active-border: rgba(136, 192, 208, 0.40);
+  --gdab-starred: #ebcb8b; --gdab-danger: #bf616a;
+  --gdab-skeleton-base: #3b4252; --gdab-skeleton-sheen: #434c5e;
+  --gdab-scrollbar-thumb: rgba(136, 192, 208, 0.32); --gdab-scrollbar-thumb-hover: rgba(136, 192, 208, 0.55);
+  color: var(--gdab-text); -webkit-font-smoothing: antialiased;
+}
+
+/* --- Tokyo Night: midnight blue-black + soft blue accent. --- */
+.gdab-theme-tokyonight {
+  --gdab-accent: #7aa2f7; --gdab-accent-hover: #9bb6f9; --gdab-accent-rgb: 122, 162, 247; --gdab-on-accent: #1a1b26;
+  --gdab-surface: #1a1b26; --gdab-secondary-surface: #16161e; --gdab-primary-surface: #13131a;
+  --gdab-grid-card: #24283b; --gdab-control-surface: #24283b; --gdab-control-active: #2f334d;
+  --gdab-text: #c0caf5; --gdab-text-muted: rgba(169, 177, 214, 0.78); --gdab-text-faint: rgba(169, 177, 214, 0.46);
+  --gdab-row-hover: rgba(192, 202, 245, 0.05); --gdab-row-selected: rgba(122, 162, 247, 0.20); --gdab-row-selected-ring: rgba(122, 162, 247, 0.45);
+  --gdab-divider: rgba(192, 202, 245, 0.10); --gdab-divider-hover: rgba(192, 202, 245, 0.18);
+  --gdab-chip-active-hover: rgba(122, 162, 247, 0.22); --gdab-chip-active-border: rgba(122, 162, 247, 0.40);
+  --gdab-starred: #e0af68; --gdab-danger: #f7768e;
+  --gdab-skeleton-base: #24283b; --gdab-skeleton-sheen: #2f334d;
+  --gdab-scrollbar-thumb: rgba(122, 162, 247, 0.32); --gdab-scrollbar-thumb-hover: rgba(122, 162, 247, 0.55);
+  color: var(--gdab-text); -webkit-font-smoothing: antialiased;
+}
+
+/* --- Gruvbox (dark): warm retro browns + burnt-orange accent. --- */
+.gdab-theme-gruvbox {
+  --gdab-accent: #fe8019; --gdab-accent-hover: #fe9a4d; --gdab-accent-rgb: 254, 128, 25; --gdab-on-accent: #282828;
+  --gdab-surface: #282828; --gdab-secondary-surface: #1d2021; --gdab-primary-surface: #1d2021;
+  --gdab-grid-card: #3c3836; --gdab-control-surface: #3c3836; --gdab-control-active: #504945;
+  --gdab-text: #ebdbb2; --gdab-text-muted: rgba(213, 196, 161, 0.80); --gdab-text-faint: rgba(168, 153, 132, 0.85);
+  --gdab-row-hover: rgba(235, 219, 178, 0.06); --gdab-row-selected: rgba(254, 128, 25, 0.18); --gdab-row-selected-ring: rgba(254, 128, 25, 0.42);
+  --gdab-divider: rgba(235, 219, 178, 0.10); --gdab-divider-hover: rgba(235, 219, 178, 0.18);
+  --gdab-chip-active-hover: rgba(254, 128, 25, 0.20); --gdab-chip-active-border: rgba(254, 128, 25, 0.38);
+  --gdab-starred: #fabd2f; --gdab-danger: #fb4934;
+  --gdab-skeleton-base: #3c3836; --gdab-skeleton-sheen: #504945;
+  --gdab-scrollbar-thumb: rgba(254, 128, 25, 0.30); --gdab-scrollbar-thumb-hover: rgba(254, 128, 25, 0.52);
+  color: var(--gdab-text); -webkit-font-smoothing: antialiased;
+}
+
+/* --- Solarized (dark): the classic teal-navy base + blue accent (Ethan Schoonover). --- */
+.gdab-theme-solarized {
+  --gdab-accent: #268bd2; --gdab-accent-hover: #4ba3de; --gdab-accent-rgb: 38, 139, 210; --gdab-on-accent: #fdf6e3;
+  --gdab-surface: #002b36; --gdab-secondary-surface: #002129; --gdab-primary-surface: #001b22;
+  --gdab-grid-card: #073642; --gdab-control-surface: #073642; --gdab-control-active: #0a4250;
+  --gdab-text: #93a1a1; --gdab-text-muted: rgba(131, 148, 150, 0.92); --gdab-text-faint: rgba(101, 123, 131, 0.92);
+  --gdab-row-hover: rgba(147, 161, 161, 0.06); --gdab-row-selected: rgba(38, 139, 210, 0.20); --gdab-row-selected-ring: rgba(38, 139, 210, 0.45);
+  --gdab-divider: rgba(147, 161, 161, 0.12); --gdab-divider-hover: rgba(147, 161, 161, 0.20);
+  --gdab-chip-active-hover: rgba(38, 139, 210, 0.22); --gdab-chip-active-border: rgba(38, 139, 210, 0.40);
+  --gdab-starred: #b58900; --gdab-danger: #dc322f;
+  --gdab-skeleton-base: #073642; --gdab-skeleton-sheen: #0a4250;
+  --gdab-scrollbar-thumb: rgba(38, 139, 210, 0.32); --gdab-scrollbar-thumb-hover: rgba(38, 139, 210, 0.55);
+  color: var(--gdab-text); -webkit-font-smoothing: antialiased;
+}
+
+/* --- Catppuccin (Mocha): cozy pastel-on-dark + mauve accent. --- */
+.gdab-theme-catppuccin {
+  --gdab-accent: #cba6f7; --gdab-accent-hover: #d7bbf9; --gdab-accent-rgb: 203, 166, 247; --gdab-on-accent: #1e1e2e;
+  --gdab-surface: #1e1e2e; --gdab-secondary-surface: #181825; --gdab-primary-surface: #11111b;
+  --gdab-grid-card: #313244; --gdab-control-surface: #313244; --gdab-control-active: #45475a;
+  --gdab-text: #cdd6f4; --gdab-text-muted: rgba(166, 173, 200, 0.92); --gdab-text-faint: rgba(108, 112, 134, 0.95);
+  --gdab-row-hover: rgba(205, 214, 244, 0.05); --gdab-row-selected: rgba(203, 166, 247, 0.20); --gdab-row-selected-ring: rgba(203, 166, 247, 0.45);
+  --gdab-divider: rgba(205, 214, 244, 0.10); --gdab-divider-hover: rgba(205, 214, 244, 0.18);
+  --gdab-chip-active-hover: rgba(203, 166, 247, 0.22); --gdab-chip-active-border: rgba(203, 166, 247, 0.40);
+  --gdab-starred: #f9e2af; --gdab-danger: #f38ba8;
+  --gdab-skeleton-base: #313244; --gdab-skeleton-sheen: #45475a;
+  --gdab-scrollbar-thumb: rgba(203, 166, 247, 0.32); --gdab-scrollbar-thumb-hover: rgba(203, 166, 247, 0.55);
+  color: var(--gdab-text); -webkit-font-smoothing: antialiased;
+}
+
+/* --- Notion: calm document. Airy whitespace, neutral grays, hairline dividers,
+   faint-gray hover, near-monochrome with a restrained blue, system sans, Notion's
+   signature warm-ink text. Restraint is the point. ------------------------------ */
+.gdab-theme-notion {
+  --gdab-accent: #2383e2;
+  --gdab-accent-hover: #1a6dc0;
+  --gdab-accent-rgb: 35, 131, 226;
+  --gdab-on-accent: #ffffff;
+
+  --gdab-surface: transparent;
+  --gdab-grid-card: #ffffff;
+
+  --gdab-text: #37352f;
+  --gdab-text-muted: rgba(55, 53, 47, 0.7);
+  --gdab-text-faint: rgba(55, 53, 47, 0.4);
+
+  --gdab-row-hover: rgba(55, 53, 47, 0.055);
+  --gdab-row-selected: rgba(35, 131, 226, 0.11);
+  --gdab-row-selected-ring: transparent;
+  --gdab-row-radius: 6px;
+
+  --gdab-divider: rgba(55, 53, 47, 0.09);
+  --gdab-divider-hover: rgba(55, 53, 47, 0.16);
+
+  --gdab-control-surface: rgba(55, 53, 47, 0.045);
+  --gdab-secondary-surface: rgba(55, 53, 47, 0.03);
+  --gdab-primary-surface: #ffffff;
+  --gdab-control-active: rgba(55, 53, 47, 0.09);
+  --gdab-control-radius: 6px;
+  --gdab-bar-radius: 6px;
+  --gdab-thumbnail-radius: 4px;
+  --gdab-chip-active-hover: rgba(35, 131, 226, 0.16);
+  --gdab-chip-active-border: rgba(35, 131, 226, 0.28);
+
+  --gdab-starred: #d9a200;
+
+  --gdab-skeleton-base: rgba(55, 53, 47, 0.07);
+  --gdab-skeleton-sheen: rgba(55, 53, 47, 0.035);
+
+  --gdab-scrollbar-track: transparent;
+  --gdab-scrollbar-thumb: rgba(55, 53, 47, 0.18);
+  --gdab-scrollbar-thumb-hover: rgba(55, 53, 47, 0.32);
+
+  --gdab-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Helvetica, "Apple Color Emoji", Arial, sans-serif;
+  --gdab-title-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Helvetica, Arial, sans-serif;
+  --gdab-letter-spacing: normal;
+  --gdab-gap: 10px;
+
+  /* Notion renders its warm-ink text on a crisp, antialiased system sans. The root
+     `color` cascades to the otherwise-uncolored row name + title; muted/faint
+     elements keep their own token colors. */
+  color: var(--gdab-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Airier list rows — Notion's roomy line height. Grid/compact set their own padding
+   at higher specificity, so only the default list view picks this up. */
+.gdab-theme-notion .gdab-drive-panel-row {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.theme-dark .gdab-theme-notion {
+  --gdab-accent: #4a9eed;
+  --gdab-accent-hover: #6fb2f0;
+  --gdab-accent-rgb: 74, 158, 237;
+  --gdab-on-accent: #ffffff;
+
+  --gdab-text: rgba(255, 255, 255, 0.81);
+  --gdab-text-muted: rgba(255, 255, 255, 0.5);
+  --gdab-text-faint: rgba(255, 255, 255, 0.32);
+
+  --gdab-row-hover: rgba(255, 255, 255, 0.055);
+  --gdab-row-selected: rgba(74, 158, 237, 0.18);
+  --gdab-row-selected-ring: transparent;
+
+  --gdab-divider: rgba(255, 255, 255, 0.094);
+  --gdab-divider-hover: rgba(255, 255, 255, 0.16);
+
+  --gdab-control-surface: rgba(255, 255, 255, 0.055);
+  --gdab-secondary-surface: rgba(255, 255, 255, 0.035);
+  --gdab-primary-surface: #202020;
+  --gdab-control-active: rgba(255, 255, 255, 0.09);
+  --gdab-grid-card: #202020;
+  --gdab-chip-active-hover: rgba(74, 158, 237, 0.24);
+  --gdab-chip-active-border: rgba(74, 158, 237, 0.36);
+
+  --gdab-starred: #e8c14d;
+
+  --gdab-skeleton-base: rgba(255, 255, 255, 0.08);
+  --gdab-skeleton-sheen: rgba(255, 255, 255, 0.045);
+
+  --gdab-scrollbar-track: transparent;
+  --gdab-scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --gdab-scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
+}
+
+/* Notion keeps filters quiet until they carry state: neutral hairline pills, then
+   a pale blue wash rather than a saturated primary button. */
+.gdab-theme-notion .gdab-drive-panel-chips {
+  gap: 4px;
+  margin-top: 0;
+}
+
+.gdab-theme-notion .gdab-drive-panel-chip {
+  padding: 1px 7px 1px 6px;
+  background: transparent;
+}
+
+.gdab-theme-notion .gdab-drive-panel-chip.is-active {
+  color: var(--gdab-text);
+  background: var(--gdab-row-selected);
+  border-color: var(--gdab-chip-active-border);
+}
+
+.gdab-theme-notion .gdab-drive-panel-chip.is-active:hover {
+  color: var(--gdab-text);
+  background: var(--gdab-chip-active-hover);
+  border-color: var(--gdab-chip-active-border);
+}
+
+/* Root-level collections (My Drive, Starred, Recent, Trash) read as calm document
+   sections. Nested breadcrumb behavior stays unchanged. */
+.gdab-theme-notion .gdab-drive-panel-roots {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--gdab-divider);
+}
+
+.gdab-theme-notion .gdab-drive-panel-breadcrumbs.is-root .gdab-drive-panel-breadcrumb.is-current {
+  padding: 2px 0;
+  font-size: var(--font-ui-small);
+  font-weight: 600;
+}
+
+/* Airy database cards with an inset hairline: no elevation, no layout-changing
+   border, and a slightly wider measure than the native grid. */
+.gdab-theme-notion .gdab-drive-panel-list.is-view-grid {
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.gdab-theme-notion .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row {
+  padding: 12px 8px 10px;
+  gap: 7px;
+  box-shadow: inset 0 0 0 1px var(--gdab-divider);
+}
+
+.gdab-theme-notion .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row:hover {
+  box-shadow: inset 0 0 0 1px var(--gdab-divider-hover);
+}
+
+.gdab-theme-notion .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row.is-selected {
+  box-shadow: inset 0 0 0 1px var(--gdab-chip-active-border);
+}
+
+/* Preserve the keyboard ring above the grid-card hairline and selected state. */
+.gdab-theme-notion .gdab-drive-panel-list:focus-within .gdab-drive-panel-row.is-active {
+  box-shadow: inset 0 0 0 2px var(--gdab-accent);
+}
+
+.gdab-theme-notion .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-icon.has-thumbnail-source {
+  box-shadow: inset 0 0 0 1px var(--gdab-divider);
+}
+
+/* Selection and details are understated document callouts, not floating chrome. */
+.gdab-theme-notion .gdab-drive-panel-selection-bar,
+.gdab-theme-notion .gdab-drive-panel-detail-bar {
+  padding: 7px 8px;
+  box-shadow: none;
+}
+
+.gdab-theme-notion .gdab-drive-panel-selection-count {
+  font-weight: 500;
+}
+
+.gdab-theme-notion .gdab-drive-panel-state {
+  line-height: 1.5;
+}
+
+/* --- Google Drive: Material. White surfaces, Google blue (#1a73e8) accent + a pale-blue
+   selection, defined row dividers, Material grays, outlined filter chips, elevated grid cards,
+   and a Roboto-leaning system stack. The per-type icon palette already defaults to Drive's
+   (Docs blue / Sheets green / Slides yellow / PDF red), so colored file types read through
+   here as-is. Reads like drive.google.com. ----------------------------------------------------- */
+.gdab-theme-drive {
+  --gdab-accent: #1a73e8;
+  --gdab-accent-hover: #1765cc;
+  --gdab-accent-rgb: 26, 115, 232;
+  --gdab-on-accent: #ffffff;
+
+  --gdab-surface: #ffffff;
+  --gdab-grid-card: #ffffff;
+  --gdab-primary-surface: #ffffff;
+  --gdab-secondary-surface: #f8f9fa;
+  --gdab-control-surface: #f1f3f4;
+  --gdab-control-active: #e8eaed;
+
+  --gdab-text: #202124;
+  --gdab-text-muted: #5f6368;
+  --gdab-text-faint: #70757a;
+  --gdab-danger: #d93025;
+  --gdab-starred: #f9ab00;
+
+  --gdab-row-hover: rgba(60, 64, 67, 0.08);
+  --gdab-row-selected: #e8f0fe;
+  --gdab-row-selected-ring: transparent;
+  --gdab-row-radius: 8px;
+
+  --gdab-divider: rgba(60, 64, 67, 0.14);
+  --gdab-divider-hover: rgba(60, 64, 67, 0.24);
+
+  --gdab-control-radius: 8px;
+  --gdab-bar-radius: 8px;
+  --gdab-thumbnail-radius: 8px;
+
+  --gdab-drive-chip-outline: #747775;
+  --gdab-drive-chip-hover: #f0f4f9;
+  --gdab-drive-grid-shadow:
+    0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+  --gdab-drive-grid-shadow-hover:
+    0 1px 3px rgba(60, 64, 67, 0.3), 0 4px 8px 1px rgba(60, 64, 67, 0.15);
+
+  --gdab-skeleton-base: rgba(60, 64, 67, 0.1);
+  --gdab-skeleton-sheen: rgba(60, 64, 67, 0.05);
+
+  --gdab-scrollbar-track: transparent;
+  --gdab-scrollbar-thumb: rgba(60, 64, 67, 0.24);
+  --gdab-scrollbar-thumb-hover: rgba(60, 64, 67, 0.4);
+
+  --gdab-font: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+    Arial, "Apple Color Emoji", sans-serif;
+  --gdab-title-font: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Helvetica Neue", Arial, sans-serif;
+  --gdab-letter-spacing: normal;
+  --gdab-gap: 6px;
+
+  /* Material's near-black ink cascades to the otherwise-uncolored row name/title; muted/faint
+     elements keep their own token colors. */
+  color: var(--gdab-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Classic Drive list/compact: full-width rectangular rows separated by a defined hairline. Grid
+   is excluded so its elevated cards keep the rounded --gdab-row-radius. */
+.gdab-theme-drive .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-row {
+  border-radius: 0;
+  border-bottom: 1px solid var(--gdab-divider);
+}
+
+.gdab-theme-drive .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-row:last-child {
+  border-bottom: none;
+}
+
+.theme-dark .gdab-theme-drive {
+  --gdab-accent: #8ab4f8;
+  --gdab-accent-hover: #aecbfa;
+  --gdab-accent-rgb: 138, 180, 248;
+  --gdab-on-accent: #202124;
+
+  --gdab-surface: #1f1f1f;
+  --gdab-grid-card: #28292c;
+  --gdab-primary-surface: #1f1f1f;
+  --gdab-secondary-surface: #28292c;
+  --gdab-control-surface: #2d2e31;
+  --gdab-control-active: #3c4043;
+
+  --gdab-text: #e8eaed;
+  --gdab-text-muted: #9aa0a6;
+  --gdab-text-faint: #82878c;
+  --gdab-danger: #f28b82;
+  --gdab-starred: #fdd663;
+
+  --gdab-row-hover: rgba(232, 234, 237, 0.08);
+  --gdab-row-selected: rgba(138, 180, 248, 0.18);
+  --gdab-row-selected-ring: transparent;
+
+  --gdab-divider: rgba(232, 234, 237, 0.13);
+  --gdab-divider-hover: rgba(232, 234, 237, 0.24);
+
+  --gdab-drive-chip-outline: #8e918f;
+  --gdab-drive-chip-hover: #303134;
+  --gdab-drive-grid-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.55), 0 1px 3px 1px rgba(0, 0, 0, 0.3);
+  --gdab-drive-grid-shadow-hover:
+    0 2px 4px rgba(0, 0, 0, 0.6), 0 5px 10px 1px rgba(0, 0, 0, 0.35);
+
+  --gdab-skeleton-base: rgba(232, 234, 237, 0.1);
+  --gdab-skeleton-sheen: rgba(232, 234, 237, 0.05);
+
+  --gdab-scrollbar-track: transparent;
+  --gdab-scrollbar-thumb: rgba(232, 234, 237, 0.22);
+  --gdab-scrollbar-thumb-hover: rgba(232, 234, 237, 0.38);
+}
+
+/* Material filter chips start as outlined controls and become unmistakably primary when active.
+   The compact 8px corners match Drive's filter controls without turning them into toolbar buttons. */
+.gdab-theme-drive .gdab-drive-panel-chips {
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.gdab-theme-drive .gdab-drive-panel-chip {
+  min-height: 28px;
+  padding: 3px 10px 3px 9px;
+  background: transparent;
+  border-color: var(--gdab-drive-chip-outline);
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.gdab-theme-drive .gdab-drive-panel-chip:hover {
+  background: var(--gdab-drive-chip-hover);
+  border-color: var(--gdab-text-muted);
+}
+
+.gdab-theme-drive .gdab-drive-panel-chip.is-active {
+  color: var(--gdab-on-accent);
+  background: var(--gdab-accent);
+  border-color: var(--gdab-accent);
+}
+
+.gdab-theme-drive .gdab-drive-panel-chip.is-active:hover {
+  color: var(--gdab-on-accent);
+  background: var(--gdab-accent-hover);
+  border-color: var(--gdab-accent-hover);
+}
+
+/* Drive grid cards use Material elevation instead of a hard border. Equal-specificity state rules
+   are ordered base -> hover -> selected/drop -> keyboard focus, so stronger interaction states
+   retain their ring while keeping the elevation shadow. */
+.gdab-theme-drive .gdab-drive-panel-list.is-view-grid {
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  padding: 2px;
+}
+
+.gdab-theme-drive .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row {
+  padding: 11px 8px 9px;
+  gap: 7px;
+  box-shadow: var(--gdab-drive-grid-shadow);
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.gdab-theme-drive .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row:hover {
+  box-shadow: var(--gdab-drive-grid-shadow-hover);
+}
+
+.gdab-theme-drive .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row.is-selected,
+.gdab-theme-drive .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row.is-drop-target {
+  box-shadow: inset 0 0 0 2px var(--gdab-accent), var(--gdab-drive-grid-shadow-hover);
+}
+
+.gdab-theme-drive .gdab-drive-panel-list.is-view-grid:focus-within .gdab-drive-panel-row.is-active {
+  box-shadow:
+    inset 0 0 0 2px var(--gdab-accent),
+    0 0 0 2px rgba(var(--gdab-accent-rgb), 0.2),
+    var(--gdab-drive-grid-shadow-hover);
+}
+
+/* --- macOS: Finder/Sonoma. White (light) / near-black (dark) list surfaces, an SF-like system
+   stack, tight list rows, hairline inset separators, quiet segmented controls, and the signature
+   macOS move: a SOLID rounded system-blue selection pill with legible white text + icons. Calm,
+   native, system-controls feel. --------------------------------------------------------------- */
+.gdab-theme-macos {
+  --gdab-accent: #0071e3;
+  --gdab-accent-hover: #0063c6;
+  --gdab-accent-rgb: 0, 113, 227;
+  --gdab-on-accent: #ffffff;
+
+  --gdab-surface: #ffffff;
+  --gdab-grid-card: #f8f8fa;
+  --gdab-primary-surface: #ffffff;
+  --gdab-secondary-surface: #f5f5f7;
+  --gdab-control-surface: #f0f0f2;
+  --gdab-control-active: #e5e5ea;
+
+  --gdab-text: #1d1d1f;
+  --gdab-text-muted: #5f6066;
+  --gdab-text-faint: #717278;
+  --gdab-danger: #d70015;
+  --gdab-starred: #eaa700;
+
+  /* Solid system-blue selection pill (not a translucent wash); text/icons flip to white below. */
+  --gdab-row-hover: rgba(0, 0, 0, 0.05);
+  --gdab-row-selected: #0071e3;
+  --gdab-row-selected-ring: transparent;
+  --gdab-row-radius: 6px;
+
+  --gdab-divider: rgba(0, 0, 0, 0.08);
+  --gdab-divider-hover: rgba(0, 0, 0, 0.14);
+  --gdab-macos-bar-surface: rgba(245, 245, 247, 0.82);
+  --gdab-macos-grid-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.09);
+  --gdab-macos-grid-shadow-hover: inset 0 0 0 1px rgba(0, 0, 0, 0.17),
+    0 2px 7px rgba(0, 0, 0, 0.08);
+
+  --gdab-control-radius: 6px;
+  --gdab-bar-radius: 8px;
+  --gdab-thumbnail-radius: 5px;
+
+  --gdab-skeleton-base: rgba(0, 0, 0, 0.08);
+  --gdab-skeleton-sheen: rgba(0, 0, 0, 0.04);
+
+  --gdab-scrollbar-track: transparent;
+  --gdab-scrollbar-thumb: rgba(0, 0, 0, 0.22);
+  --gdab-scrollbar-thumb-hover: rgba(0, 0, 0, 0.35);
+
+  --gdab-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Helvetica Neue", Helvetica, Arial, "Apple Color Emoji", sans-serif;
+  --gdab-title-font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --gdab-letter-spacing: normal;
+  --gdab-gap: 6px;
+
+  /* macOS renders near-black ink on a crisp antialiased SF stack; the root color cascades to the
+     otherwise-uncolored row name/title while muted/faint elements keep their own token colors. */
+  color: var(--gdab-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tight Finder list rows. Scoped to the standard list so compact keeps its own denser 2px padding
+   and grid keeps its card padding. */
+.gdab-theme-macos .gdab-drive-panel-list:not(.is-view-grid):not(.is-view-compact) .gdab-drive-panel-row {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+/* List + compact selection is a solid system-blue fill, so the row's text, metadata, icon, and
+   badges all flip to white for contrast (white on #0071e3 = 4.67:1, AA). Higher specificity than
+   the per-type icon accents and the starred badge makes the row one cohesive pill. Inline-baked
+   Office icons and image thumbnails remain in color, as Finder keeps real file icons in color. */
+.gdab-theme-macos .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-row.is-selected,
+.gdab-theme-macos .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-row.is-selected .gdab-drive-panel-row-name,
+.gdab-theme-macos .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-row.is-selected .gdab-drive-panel-row-meta,
+.gdab-theme-macos .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-row.is-selected .gdab-drive-panel-row-detail,
+.gdab-theme-macos .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-row.is-selected .gdab-drive-panel-row-icon,
+.gdab-theme-macos .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-row.is-selected .gdab-drive-panel-row-badge {
+  color: var(--gdab-on-accent);
+}
+
+.theme-dark .gdab-theme-macos {
+  --gdab-accent: #0a70e8;
+  --gdab-accent-hover: #2f8bff;
+  --gdab-accent-rgb: 10, 112, 232;
+  --gdab-on-accent: #ffffff;
+
+  --gdab-surface: #1e1e1e;
+  --gdab-grid-card: #2a2a2c;
+  --gdab-primary-surface: #1e1e1e;
+  --gdab-secondary-surface: #2a2a2c;
+  --gdab-control-surface: #2e2e30;
+  --gdab-control-active: #3a3a3c;
+
+  --gdab-text: #f5f5f7;
+  --gdab-text-muted: #98989d;
+  --gdab-text-faint: #909095;
+  --gdab-danger: #ff453a;
+  --gdab-starred: #ffd426;
+
+  /* Dark selection fill stays deep enough for white text (white on #0a70e8 = 4.61:1, AA). */
+  --gdab-row-hover: rgba(255, 255, 255, 0.07);
+  --gdab-row-selected: #0a70e8;
+  --gdab-row-selected-ring: transparent;
+
+  --gdab-divider: rgba(255, 255, 255, 0.1);
+  --gdab-divider-hover: rgba(255, 255, 255, 0.16);
+  --gdab-macos-bar-surface: rgba(46, 46, 48, 0.86);
+  --gdab-macos-grid-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --gdab-macos-grid-shadow-hover: inset 0 0 0 1px rgba(255, 255, 255, 0.19),
+    0 2px 8px rgba(0, 0, 0, 0.32);
+
+  --gdab-skeleton-base: rgba(255, 255, 255, 0.09);
+  --gdab-skeleton-sheen: rgba(255, 255, 255, 0.05);
+
+  --gdab-scrollbar-track: transparent;
+  --gdab-scrollbar-thumb: rgba(255, 255, 255, 0.22);
+  --gdab-scrollbar-thumb-hover: rgba(255, 255, 255, 0.36);
+}
+
+/* Finder's filter controls read as one quiet segmented group. The active segment uses system blue;
+   the clear segment stays transparent through the later generic `.is-clear` rule. */
+.gdab-theme-macos .gdab-drive-panel-chips {
+  width: fit-content;
+  max-width: 100%;
+  gap: 1px;
+  margin-top: 1px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--gdab-control-surface);
+  box-shadow: inset 0 0 0 1px var(--gdab-divider);
+}
+
+.gdab-theme-macos .gdab-drive-panel-chip {
+  padding: 1px 7px 1px 6px;
+  border-color: transparent;
+  border-radius: 6px;
+  background: transparent;
+}
+
+.gdab-theme-macos .gdab-drive-panel-chip:hover {
+  border-color: transparent;
+  background: var(--gdab-control-active);
+}
+
+.gdab-theme-macos .gdab-drive-panel-chip.is-active {
+  color: var(--gdab-on-accent);
+  border-color: var(--gdab-accent);
+  background: var(--gdab-accent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+}
+
+.gdab-theme-macos .gdab-drive-panel-chip.is-active:hover {
+  border-color: var(--gdab-accent-hover);
+  background: var(--gdab-accent-hover);
+}
+
+/* Finder icon view: neutral hairline cards preserve each file icon's own color. Selection gets a
+   system-blue inset ring and a blue filename label rather than turning the entire card blue. Label
+   padding is reserved in every state, so selecting a card never shifts the grid. */
+.gdab-theme-macos .gdab-drive-panel-list.is-view-grid {
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 6px;
+  padding: 2px;
+}
+
+.gdab-theme-macos .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row {
+  padding: 10px 6px 8px;
+  background: var(--gdab-grid-card);
+  box-shadow: var(--gdab-macos-grid-shadow);
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.gdab-theme-macos .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row:hover {
+  background: var(--gdab-secondary-surface);
+  box-shadow: var(--gdab-macos-grid-shadow-hover);
+}
+
+.gdab-theme-macos .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-name {
+  padding: 2px 5px;
+  border-radius: 5px;
+}
+
+.gdab-theme-macos .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row.is-selected {
+  background: var(--gdab-grid-card);
+  box-shadow: inset 0 0 0 2px var(--gdab-accent);
+}
+
+.gdab-theme-macos .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row.is-selected .gdab-drive-panel-row-name {
+  color: var(--gdab-on-accent);
+  background: var(--gdab-accent);
+}
+
+.gdab-theme-macos .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row.is-drop-target {
+  background: rgba(var(--gdab-accent-rgb), 0.1);
+  box-shadow: inset 0 0 0 2px var(--gdab-accent);
+}
+
+.gdab-theme-macos .gdab-drive-panel-list.is-view-grid:focus-within .gdab-drive-panel-row.is-active {
+  box-shadow:
+    inset 0 0 0 2px var(--gdab-accent),
+    0 0 0 2px rgba(var(--gdab-accent-rgb), 0.24);
+}
+
+.gdab-theme-macos .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-icon.has-thumbnail-source {
+  box-shadow: inset 0 0 0 1px var(--gdab-divider);
+}
+
+/* Translucent-feeling Finder chrome for collection roots, path headers, and contextual bars. */
+.gdab-theme-macos .gdab-drive-panel-roots,
+.gdab-theme-macos .gdab-drive-panel-breadcrumbs,
+.gdab-theme-macos .gdab-drive-panel-selection-bar,
+.gdab-theme-macos .gdab-drive-panel-detail-bar {
+  border-color: transparent;
+  background: var(--gdab-macos-bar-surface);
+  box-shadow: inset 0 0 0 1px var(--gdab-divider);
+  backdrop-filter: saturate(160%) blur(12px);
+}
+
+.gdab-theme-macos .gdab-drive-panel-roots {
+  padding: 3px;
+  border-radius: var(--gdab-bar-radius);
+}
+
+.gdab-theme-macos .gdab-drive-panel-root-select {
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.gdab-theme-macos .gdab-drive-panel-breadcrumbs {
+  min-height: 24px;
+  padding: 2px 4px;
+  border-radius: var(--gdab-bar-radius);
+}
+
+.gdab-theme-macos .gdab-drive-panel-breadcrumbs.is-root .gdab-drive-panel-breadcrumb-group {
+  max-width: 100%;
+}
+
+.gdab-theme-macos .gdab-drive-panel-breadcrumbs.is-root .gdab-drive-panel-breadcrumb.is-current {
+  max-width: 100%;
+  font-weight: 600;
+}
+
+.gdab-theme-macos .gdab-drive-panel-selection-bar,
+.gdab-theme-macos .gdab-drive-panel-detail-bar {
+  padding: 6px 8px;
+}
+
+.gdab-theme-macos .gdab-drive-panel-selection-count {
+  font-weight: 500;
+}
+
+/* Overlay-scrollbar proportions: a narrow, rounded thumb that strengthens only on hover. */
+.gdab-theme-macos .gdab-drive-panel-list::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.gdab-theme-macos .gdab-drive-panel-list::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+/* --- Luxe: 정말 세련된 / quiet luxury. Premium minimalism — high-contrast monochrome
+   surfaces, thin 1px hairlines, a refined serif for the title/section header over a clean
+   neutral sans body, ONE restrained antique-bronze accent, generous negative space, sharp
+   2–3px radii, elegant micro-transitions. Restraint with intent. -------------------------- */
+.gdab-theme-luxe {
+  --gdab-accent: #8a6d44;
+  --gdab-accent-hover: #73592f;
+  --gdab-accent-rgb: 138, 109, 68;
+  --gdab-on-accent: #ffffff;
+
+  --gdab-surface: #ffffff;
+  --gdab-grid-card: #ffffff;
+  --gdab-primary-surface: #ffffff;
+  --gdab-secondary-surface: #faf9f7;
+  --gdab-control-surface: #f4f2ee;
+  --gdab-control-active: #ebe8e2;
+
+  --gdab-text: #14130f;
+  --gdab-text-muted: #6b6660;
+  --gdab-text-faint: #6f6a62;
+  --gdab-danger: #b3261e;
+  --gdab-starred: #b08a4e;
+
+  /* Monochrome neutral hover vs. a faint warm wash + brass hairline ring for selection, so the
+     one accent is the only color event in the panel. */
+  --gdab-row-hover: rgba(20, 19, 15, 0.04);
+  --gdab-row-selected: rgba(138, 109, 68, 0.12);
+  --gdab-row-selected-ring: rgba(138, 109, 68, 0.45);
+  --gdab-row-radius: 3px;
+
+  --gdab-divider: rgba(20, 19, 15, 0.1);
+  --gdab-divider-hover: rgba(20, 19, 15, 0.2);
+  --gdab-luxe-grid-frame: rgba(20, 19, 15, 0.14);
+  --gdab-luxe-grid-frame-hover: rgba(20, 19, 15, 0.28);
+
+  --gdab-control-radius: 3px;
+  --gdab-bar-radius: 3px;
+  --gdab-thumbnail-radius: 2px;
+
+  --gdab-skeleton-base: rgba(20, 19, 15, 0.07);
+  --gdab-skeleton-sheen: rgba(20, 19, 15, 0.035);
+
+  --gdab-scrollbar-track: transparent;
+  --gdab-scrollbar-thumb: rgba(20, 19, 15, 0.16);
+  --gdab-scrollbar-thumb-hover: rgba(20, 19, 15, 0.3);
+
+  --gdab-font: "Helvetica Neue", Helvetica, Inter, ui-sans-serif, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Arial, "Apple Color Emoji", sans-serif;
+  --gdab-title-font: "Hoefler Text", "Iowan Old Style", "Palatino Linotype", Palatino,
+    "Book Antiqua", Georgia, "Times New Roman", serif;
+  --gdab-letter-spacing: normal;
+  --gdab-gap: 12px;
+
+  /* Crisp near-black ink on the clean sans body cascades to the otherwise-uncolored row
+     name + title; muted/faint elements keep their own token colors. */
+  color: var(--gdab-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.theme-dark .gdab-theme-luxe {
+  --gdab-accent: #c4a368;
+  --gdab-accent-hover: #d8b97e;
+  --gdab-accent-rgb: 196, 163, 104;
+  --gdab-on-accent: #14130f;
+
+  --gdab-surface: #0d0d0e;
+  --gdab-grid-card: #161618;
+  --gdab-primary-surface: #0d0d0e;
+  --gdab-secondary-surface: #161617;
+  --gdab-control-surface: #1c1c1e;
+  --gdab-control-active: #28282b;
+
+  --gdab-text: #f5f3ee;
+  --gdab-text-muted: #a8a39a;
+  --gdab-text-faint: #969087;
+  --gdab-danger: #f1786f;
+  --gdab-starred: #d4b478;
+
+  --gdab-row-hover: rgba(245, 243, 238, 0.05);
+  --gdab-row-selected: rgba(196, 163, 104, 0.16);
+  --gdab-row-selected-ring: rgba(196, 163, 104, 0.5);
+
+  --gdab-divider: rgba(245, 243, 238, 0.12);
+  --gdab-divider-hover: rgba(245, 243, 238, 0.22);
+  --gdab-luxe-grid-frame: rgba(245, 243, 238, 0.16);
+  --gdab-luxe-grid-frame-hover: rgba(245, 243, 238, 0.3);
+
+  --gdab-skeleton-base: rgba(245, 243, 238, 0.08);
+  --gdab-skeleton-sheen: rgba(245, 243, 238, 0.04);
+
+  --gdab-scrollbar-track: transparent;
+  --gdab-scrollbar-thumb: rgba(245, 243, 238, 0.16);
+  --gdab-scrollbar-thumb-hover: rgba(245, 243, 238, 0.3);
+}
+
+/* Premium serif moment: the panel title and the current-path crumb read as serif section
+   headers (via --gdab-title-font); the body stays a clean neutral sans set in the tokens. */
+.gdab-theme-luxe .gdab-drive-panel-title {
+  font-weight: 500;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-breadcrumb.is-current {
+  font-family: var(--gdab-title-font);
+}
+
+/* Generous, airy rows — quiet-luxury negative space. Scoped to the standard list so compact
+   keeps its density and grid keeps its card padding. */
+.gdab-theme-luxe .gdab-drive-panel-list:not(.is-view-grid):not(.is-view-compact) .gdab-drive-panel-row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+/* Full-width 1px hairline rules between list/compact rows; hover/selection become crisp bands
+   (radius 0) rather than rounded pills — restrained and editorial. Grid keeps its cards. */
+.gdab-theme-luxe .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-row {
+  border-radius: 0;
+  border-bottom: 1px solid var(--gdab-divider);
+}
+
+.gdab-theme-luxe .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-row:last-child {
+  border-bottom: none;
+}
+
+/* Quiet controls use hairlines instead of filled chrome. The search field keeps its dimensions,
+   while the focus state becomes a precise bronze underline rather than a soft glow. */
+.gdab-theme-luxe .gdab-drive-panel-filter-input {
+  border-width: 0 0 1px;
+  border-color: var(--gdab-divider);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-filter-input:focus {
+  border-color: var(--gdab-accent);
+  box-shadow: 0 1px 0 0 var(--gdab-accent);
+}
+
+.gdab-theme-luxe .gdab-drive-panel-toolbar-btn {
+  border-color: var(--gdab-divider);
+  background: transparent;
+}
+
+/* Filter chips read as a compact tab line: no pills, no saturated fill, just ink and a bronze
+   underline for the active constraint. The later generic .is-clear rule remains authoritative. */
+.gdab-theme-luxe .gdab-drive-panel-chips {
+  gap: 12px;
+  margin-top: 2px;
+  padding-bottom: 1px;
+  border-bottom: 1px solid var(--gdab-divider);
+}
+
+.gdab-theme-luxe .gdab-drive-panel-chip {
+  padding: 3px 1px 4px;
+  border-width: 0 0 1px;
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+  letter-spacing: 0.02em;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-chip:hover {
+  border-color: var(--gdab-divider-hover);
+  background: transparent;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-chip.is-active {
+  color: var(--gdab-accent);
+  border-color: var(--gdab-accent);
+  background: transparent;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-chip.is-active:hover {
+  color: var(--gdab-accent-hover);
+  border-color: var(--gdab-accent-hover);
+  background: transparent;
+}
+
+/* Gallery cards are framed by a single hairline and retain generous white space. Selection is a
+   faint warm wash with a bronze frame, never the full-bleed pill used by the macOS skin. Equal-
+   specificity state rules are ordered base -> hover -> selected/drop -> keyboard focus. */
+.gdab-theme-luxe .gdab-drive-panel-list.is-view-grid {
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 10px;
+  padding: 2px;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row {
+  padding: 13px 9px 11px;
+  gap: 9px;
+  border-radius: 2px;
+  background: var(--gdab-grid-card);
+  box-shadow: inset 0 0 0 1px var(--gdab-luxe-grid-frame);
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row:hover {
+  background: var(--gdab-row-hover);
+  box-shadow: inset 0 0 0 1px var(--gdab-luxe-grid-frame-hover);
+}
+
+.gdab-theme-luxe .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row.is-selected {
+  background: var(--gdab-row-selected);
+  box-shadow: inset 0 0 0 1px var(--gdab-row-selected-ring);
+}
+
+.gdab-theme-luxe .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row.is-drop-target {
+  background: rgba(var(--gdab-accent-rgb), 0.14);
+  box-shadow: inset 0 0 0 1px var(--gdab-accent);
+}
+
+.gdab-theme-luxe .gdab-drive-panel-list.is-view-grid:focus-within .gdab-drive-panel-row.is-active {
+  box-shadow:
+    inset 0 0 0 1px var(--gdab-accent),
+    0 0 0 2px rgba(var(--gdab-accent-rgb), 0.22);
+}
+
+.gdab-theme-luxe .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-icon.has-thumbnail-source {
+  border-radius: var(--gdab-thumbnail-radius);
+  box-shadow: inset 0 0 0 1px var(--gdab-divider);
+}
+
+/* Root/path chrome and contextual bars share the same sparse hairline grammar. Special-view root
+   headers keep the serif current crumb, while all supporting copy remains in the sans body stack. */
+.gdab-theme-luxe .gdab-drive-panel-roots {
+  padding-bottom: 2px;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-root-select {
+  border-color: var(--gdab-divider);
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-breadcrumbs {
+  min-height: 28px;
+  padding: 2px 0 7px;
+  border-bottom: 1px solid var(--gdab-divider);
+}
+
+.gdab-theme-luxe .gdab-drive-panel-breadcrumbs.is-root .gdab-drive-panel-breadcrumb-group {
+  max-width: 100%;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-breadcrumbs.is-root .gdab-drive-panel-breadcrumb.is-current {
+  max-width: 100%;
+  padding-left: 0;
+  font-size: var(--font-ui-small);
+  font-weight: 500;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-selection-bar,
+.gdab-theme-luxe .gdab-drive-panel-detail-bar {
+  padding: 8px 2px;
+  border-width: 1px 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-selection-count {
+  color: var(--gdab-text);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-state {
+  padding: 28px 8px;
+  line-height: 1.6;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-state-title {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* Loading geometry mirrors the Luxe rows and gallery cards so the content swap does not jump. */
+.gdab-theme-luxe .gdab-drive-panel-list:not(.is-view-grid):not(.is-view-compact) .gdab-drive-panel-skeleton-row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-skeleton-row {
+  border-bottom: 1px solid var(--gdab-divider);
+}
+
+.gdab-theme-luxe .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-skeleton-row:last-child {
+  border-bottom: none;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-skeleton {
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 10px;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-skeleton-row {
+  padding: 13px 9px 11px;
+  gap: 9px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px var(--gdab-luxe-grid-frame);
+}
+
+.gdab-theme-luxe .gdab-drive-panel-skeleton-block {
+  border-radius: 1px;
+}
+
+/* A narrow, square-edged scrollbar completes the tailored rather than pill-shaped chrome. */
+.gdab-theme-luxe .gdab-drive-panel-list::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.gdab-theme-luxe .gdab-drive-panel-list::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 0;
+  background-clip: padding-box;
+}
+
+/* --- Editorial: fashion-brand lookbook. Bold typographic identity — a Didone display serif
+   masthead set in wide-tracked caps over a clean grotesque body, uppercase letter-spaced labels,
+   stark black-&-white surfaces with ONE striking editorial red, dramatic row spacing, crisp
+   full-width hairlines, oversized square-crop lookbook cards, and radius-0 chrome. -------------- */
+.gdab-theme-editorial {
+  --gdab-accent: #e10600;
+  --gdab-accent-hover: #b80500;
+  --gdab-accent-rgb: 225, 6, 0;
+  --gdab-on-accent: #ffffff;
+
+  /* Stark gallery white — every surface is paper, structure comes from hairlines not fills. */
+  --gdab-surface: #ffffff;
+  --gdab-grid-card: #ffffff;
+  --gdab-primary-surface: #ffffff;
+  --gdab-secondary-surface: #ffffff;
+  --gdab-control-surface: #ffffff;
+  --gdab-control-active: #f0f0f0;
+
+  --gdab-text: #0a0a0a;
+  --gdab-text-muted: #5c5c5c;
+  --gdab-text-faint: #6e6e6e;
+  --gdab-danger: #c01a13;
+  /* Monochrome star keeps the B&W identity; red is reserved for the one accent event. */
+  --gdab-starred: #0a0a0a;
+
+  --gdab-row-hover: rgba(10, 10, 10, 0.04);
+  --gdab-row-selected: rgba(225, 6, 0, 0.07);
+  --gdab-row-selected-ring: rgba(225, 6, 0, 0.55);
+  --gdab-row-radius: 0;
+
+  --gdab-divider: rgba(10, 10, 10, 0.14);
+  --gdab-divider-hover: rgba(10, 10, 10, 0.3);
+
+  --gdab-control-radius: 0;
+  --gdab-bar-radius: 0;
+  --gdab-thumbnail-radius: 0;
+
+  --gdab-skeleton-base: rgba(10, 10, 10, 0.07);
+  --gdab-skeleton-sheen: rgba(10, 10, 10, 0.035);
+
+  --gdab-scrollbar-track: transparent;
+  --gdab-scrollbar-thumb: rgba(10, 10, 10, 0.2);
+  --gdab-scrollbar-thumb-hover: rgba(10, 10, 10, 0.4);
+
+  --gdab-font: "Helvetica Neue", Helvetica, Arial, ui-sans-serif, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --gdab-title-font: "Didot", "Bodoni MT", "Hoefler Text", "Playfair Display",
+    "Times New Roman", Georgia, serif;
+  --gdab-letter-spacing: 0.16em;
+  --gdab-gap: 16px;
+
+  color: var(--gdab-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.theme-dark .gdab-theme-editorial {
+  /* Brighter red so the single accent still reads against pure black. Near-black on-accent ink
+     clears AA on #ff3b30; white would only reach roughly 3.5:1. */
+  --gdab-accent: #ff3b30;
+  --gdab-accent-hover: #ff5b52;
+  --gdab-accent-rgb: 255, 59, 48;
+  --gdab-on-accent: #0a0a0a;
+
+  --gdab-surface: #000000;
+  --gdab-grid-card: #0a0a0a;
+  --gdab-primary-surface: #000000;
+  --gdab-secondary-surface: #000000;
+  --gdab-control-surface: #000000;
+  --gdab-control-active: #1a1a1a;
+
+  --gdab-text: #f7f7f7;
+  --gdab-text-muted: #a0a0a0;
+  --gdab-text-faint: #8a8a8a;
+  --gdab-danger: #ff6a60;
+  --gdab-starred: #f7f7f7;
+
+  --gdab-row-hover: rgba(247, 247, 247, 0.06);
+  --gdab-row-selected: rgba(255, 59, 48, 0.16);
+  --gdab-row-selected-ring: rgba(255, 59, 48, 0.6);
+
+  --gdab-divider: rgba(247, 247, 247, 0.16);
+  --gdab-divider-hover: rgba(247, 247, 247, 0.32);
+
+  --gdab-skeleton-base: rgba(247, 247, 247, 0.08);
+  --gdab-skeleton-sheen: rgba(247, 247, 247, 0.04);
+
+  --gdab-scrollbar-track: transparent;
+  --gdab-scrollbar-thumb: rgba(247, 247, 247, 0.2);
+  --gdab-scrollbar-thumb-hover: rgba(247, 247, 247, 0.36);
+}
+
+/* Masthead: the Didone display serif (via --gdab-title-font) set in wide-tracked caps. */
+.gdab-theme-editorial .gdab-drive-panel-title {
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+/* The current crumb reads as an uppercase fashion section label rather than a path leaf. */
+.gdab-theme-editorial .gdab-drive-panel-breadcrumb.is-current {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+}
+
+/* Row metadata is set as small uppercase captions — a fashion-spec line under each name. The file
+   name itself stays sentence case (uppercasing arbitrary names would harm legibility). */
+.gdab-theme-editorial .gdab-drive-panel-row-meta {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Dramatic, gallery-like spacing in the standard list; compact keeps its density. */
+.gdab-theme-editorial .gdab-drive-panel-list:not(.is-view-grid):not(.is-view-compact) .gdab-drive-panel-row {
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+
+/* Full-width 1px hairline rules between list/compact rows; the row radius token is 0, so hover and
+   the token-driven selection (red wash + red ring) render as crisp square bands — tailored, not
+   pill-shaped. Selection stays token-driven so the keyboard focus ring (a higher-priority generic
+   rule) is never clobbered. Grid uses the separate lookbook-card treatment below. */
+.gdab-theme-editorial .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-row {
+  border-bottom: 1px solid var(--gdab-divider);
+}
+
+.gdab-theme-editorial .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-row:last-child {
+  border-bottom: none;
+}
+
+/* Search and filter controls become an uppercase tab strip: minimal chrome, generous tracking,
+   and a single red underline for the active constraint. No chip uses a solid accent fill, so the
+   labels remain high-contrast in both modes and the clear action stays visually subordinate. */
+.gdab-theme-editorial .gdab-drive-panel-filter-input {
+  border-width: 0 0 1px;
+  border-color: var(--gdab-divider);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-filter-input:focus {
+  border-color: var(--gdab-accent);
+  box-shadow: 0 1px 0 var(--gdab-accent);
+}
+
+.gdab-theme-editorial .gdab-drive-panel-chips {
+  gap: 16px;
+  margin-top: 5px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--gdab-divider);
+}
+
+.gdab-theme-editorial .gdab-drive-panel-chip {
+  padding: 4px 0 5px;
+  border-width: 0 0 2px;
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-chip:hover {
+  border-color: var(--gdab-divider-hover);
+  background: transparent;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-chip.is-active {
+  color: var(--gdab-accent);
+  border-color: var(--gdab-accent);
+  background: transparent;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-chip.is-active:hover {
+  color: var(--gdab-accent-hover);
+  border-color: var(--gdab-accent-hover);
+  background: transparent;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-chip.is-clear,
+.gdab-theme-editorial .gdab-drive-panel-chip.is-clear:hover {
+  border-color: transparent;
+  background: transparent;
+}
+
+/* Oversized lookbook cards: fewer columns, dramatic gutters, square-cropped imagery, and a sharp
+   gallery frame. State order is base -> hover -> selected/drop -> keyboard focus. The focus rule
+   intentionally reproduces the generic 2px inset ring at higher specificity so selected cards
+   cannot hide the roving-focus indicator. */
+.gdab-theme-editorial .gdab-drive-panel-list.is-view-grid {
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 18px;
+  padding: 3px;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row {
+  padding: 10px 10px 13px;
+  gap: 10px;
+  border-radius: 0;
+  background: var(--gdab-grid-card);
+  box-shadow: inset 0 0 0 1px var(--gdab-divider);
+  transition: background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row:hover {
+  background: var(--gdab-row-hover);
+  box-shadow: inset 0 0 0 1px var(--gdab-divider-hover);
+}
+
+.gdab-theme-editorial .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row.is-selected {
+  background: var(--gdab-row-selected);
+  box-shadow: inset 0 0 0 1px var(--gdab-row-selected-ring);
+}
+
+.gdab-theme-editorial .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row.is-drop-target {
+  background: rgba(var(--gdab-accent-rgb), 0.16);
+  box-shadow: inset 0 0 0 2px var(--gdab-accent);
+}
+
+.gdab-theme-editorial .gdab-drive-panel-list.is-view-grid:focus-within .gdab-drive-panel-row.is-active {
+  box-shadow: inset 0 0 0 2px var(--gdab-accent);
+}
+
+.gdab-theme-editorial .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-icon.has-thumbnail-source {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 0;
+  background: var(--gdab-secondary-surface);
+  box-shadow: inset 0 0 0 1px var(--gdab-divider);
+}
+
+.gdab-theme-editorial .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-thumbnail {
+  object-position: center;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-name {
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+/* Neutralize the optional Lucide type palette for this black-and-white skin. The extra panel/list/
+   row specificity beats the later light and dark generic type rules without !important; custom
+   folder colors and branded full-color artwork remain intentional item metadata. */
+.gdab-theme-editorial .gdab-drive-panel-list .gdab-drive-panel-row .gdab-drive-panel-row-icon.is-type-accented {
+  color: var(--gdab-text-muted);
+}
+
+/* Collection roots and path headers read like a lookbook section opener. Root-level virtual views
+   (Starred / Recent / Trash) use the single-crumb display treatment without changing their DOM. */
+.gdab-theme-editorial .gdab-drive-panel-roots {
+  padding: 2px 0 7px;
+  border-bottom: 1px solid var(--gdab-divider);
+}
+
+.gdab-theme-editorial .gdab-drive-panel-root-select {
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-breadcrumbs {
+  min-height: 38px;
+  padding: 6px 0 9px;
+  border-bottom: 1px solid var(--gdab-divider);
+}
+
+.gdab-theme-editorial .gdab-drive-panel-breadcrumbs.is-root .gdab-drive-panel-breadcrumb-group {
+  max-width: 100%;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-breadcrumbs.is-root .gdab-drive-panel-breadcrumb.is-current {
+  max-width: 100%;
+  padding-left: 0;
+  font-family: var(--gdab-title-font);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-selection-bar,
+.gdab-theme-editorial .gdab-drive-panel-detail-bar {
+  padding: 8px 0;
+  border-width: 1px 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-selection-count,
+.gdab-theme-editorial .gdab-drive-panel-detail-meta,
+.gdab-theme-editorial .gdab-drive-panel-detail-location,
+.gdab-theme-editorial .gdab-drive-panel-detail-extra,
+.gdab-theme-editorial .gdab-drive-panel-detail-status {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-state {
+  padding: 36px 4px;
+  line-height: 1.65;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-state-title {
+  font-family: var(--gdab-title-font);
+  font-size: var(--font-ui-medium);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Loading geometry exactly mirrors Editorial's list rows and lookbook cards. */
+.gdab-theme-editorial .gdab-drive-panel-list:not(.is-view-grid):not(.is-view-compact) .gdab-drive-panel-skeleton-row {
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-skeleton-row {
+  border-bottom: 1px solid var(--gdab-divider);
+}
+
+.gdab-theme-editorial .gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-skeleton-row:last-child {
+  border-bottom: none;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-skeleton {
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 18px;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-skeleton-row {
+  padding: 10px 10px 13px;
+  gap: 10px;
+  border-radius: 0;
+  background: var(--gdab-grid-card);
+  box-shadow: inset 0 0 0 1px var(--gdab-divider);
+}
+
+.gdab-theme-editorial .gdab-drive-panel-list.is-view-grid .gdab-drive-panel-skeleton-icon {
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 0;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-skeleton-block {
+  border-radius: 0;
+}
+
+/* Thin, square-edged gallery scrollbar; the generic tokenized fill remains authoritative. */
+.gdab-theme-editorial .gdab-drive-panel-list::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.gdab-theme-editorial .gdab-drive-panel-list::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 0;
+  background-clip: padding-box;
+}
+
+.gdab-drive-panel.is-drop-target {
+  outline: 2px solid var(--gdab-accent, var(--interactive-accent));
+  outline-offset: -3px;
+  background: rgba(var(--gdab-accent-rgb), 0.08);
+}
+
+.gdab-drive-panel.is-uploading {
+  cursor: progress;
+}
+
+/* Drop ONTO a folder row → that row is the target (upload goes INTO it). Stronger than the row hover
+   and distinct from the whole-panel current-folder highlight, so the target is never ambiguous. */
+.gdab-drive-panel-row.is-drop-target {
+  outline: 2px solid var(--gdab-accent, var(--interactive-accent));
+  outline-offset: -2px;
+  background: rgba(var(--gdab-accent-rgb), 0.18);
+}
+
+/* Source rows during a Drive-internal MOVE/COPY drag: dimmed so it's clear what's in flight. The drop
+   target (a folder row) keeps the stronger .is-drop-target highlight, so source vs destination never clash. */
+.gdab-drive-panel-row.is-dragging {
+  opacity: 0.45;
+}
+
+/* In-panel status chip (bottom-center): names the drop target while dragging, shows live progress
+   while uploading. pointer-events:none so it never blocks a drop; fades in/out. */
+.gdab-drive-panel-drop-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--gdab-accent, var(--interactive-accent));
+  color: var(--gdab-on-accent, var(--text-on-accent));
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 80ms ease;
+  z-index: 5;
+}
+
+.gdab-drive-panel-drop-hint.is-visible {
+  opacity: 1;
+}
+
+/* Drive-wide search + sort/view toolbar, mounted above the breadcrumbs. */
+.gdab-drive-panel-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.gdab-drive-panel-filter {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.gdab-drive-panel-filter-icon {
+  position: absolute;
+  left: 7px;
+  display: inline-flex;
+  color: var(--gdab-text-muted, var(--text-muted));
+  pointer-events: none;
+}
+
+.gdab-drive-panel-filter-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.gdab-drive-panel-filter .gdab-drive-panel-filter-input {
+  width: 100%;
+  height: 28px;
+  box-sizing: border-box;
+  /* high-specificity + logical padding so a community theme's own input styling can't collapse the
+     left inset and let the placeholder slide under the search icon (kdr saw an overlap). */
+  padding: 3px 26px 3px 30px;
+  padding-inline-start: 30px;
+  font-size: var(--font-ui-smaller);
+  border-radius: var(--gdab-control-radius, var(--radius-s, 6px));
+  transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+}
+
+.gdab-drive-panel-filter-input:focus {
+  border-color: var(--gdab-accent, var(--interactive-accent));
+  box-shadow: 0 0 0 1px var(--gdab-accent, var(--interactive-accent));
+}
+
+.gdab-drive-panel-filter-clear {
+  position: absolute;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 3px;
+  border: none;
+  background: transparent;
+  color: var(--gdab-text-muted, var(--text-muted));
+  cursor: pointer;
+  border-radius: 4px;
+  box-shadow: none;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.gdab-drive-panel-filter-clear:hover {
+  color: var(--gdab-text, var(--text-normal));
+  background: var(--gdab-row-hover, var(--background-modifier-hover));
+}
+
+.gdab-drive-panel-filter-clear:focus-visible {
+  color: var(--gdab-text, var(--text-normal));
+  outline: 2px solid var(--gdab-accent, var(--interactive-accent));
+  outline-offset: -1px;
+}
+
+.gdab-drive-panel-filter-clear svg {
+  width: 13px;
+  height: 13px;
+}
+
+.gdab-drive-panel-filter-clear.is-hidden {
+  display: none;
+}
+
+.gdab-drive-panel-search-status {
+  padding: 8px 4px;
+  color: var(--gdab-text-muted, var(--text-muted));
+  font-size: var(--font-ui-smaller);
+}
+
+.gdab-drive-panel-search-status.is-error {
+  color: var(--gdab-danger, var(--text-error));
+}
+
+.gdab-drive-panel-list.is-view-grid > .gdab-drive-panel-search-status {
+  grid-column: 1 / -1;
+}
+
+/* Drive-style filter chips row (Type/People today; Modified later). Client-side over loaded items. */
+.gdab-drive-panel-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 0 0 auto;
+  margin-top: 4px;
+}
+
+.gdab-drive-panel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 7px;
+  font-size: var(--font-ui-smaller);
+  line-height: 1.6;
+  color: var(--gdab-text, var(--text-normal));
+  background: var(--gdab-control-surface, var(--background-modifier-form-field, var(--background-secondary)));
+  border: 1px solid var(--gdab-divider, var(--background-modifier-border));
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: none;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.gdab-drive-panel-chip:hover {
+  background: var(--gdab-row-hover, var(--background-modifier-hover));
+  border-color: var(--gdab-divider-hover, var(--background-modifier-border-hover, var(--background-modifier-border)));
+}
+
+.gdab-drive-panel-chip:focus-visible {
+  outline: 2px solid var(--gdab-accent, var(--interactive-accent));
+  outline-offset: 1px;
+}
+
+.gdab-drive-panel-chip.is-active {
+  color: var(--gdab-on-accent, var(--text-on-accent));
+  background: var(--gdab-accent, var(--interactive-accent));
+  border-color: var(--gdab-accent, var(--interactive-accent));
+}
+
+.gdab-drive-panel-chip.is-active:hover {
+  background: var(--gdab-accent-hover, var(--interactive-accent-hover));
+  border-color: var(--gdab-accent-hover, var(--interactive-accent-hover));
+}
+
+.gdab-drive-panel-chip.is-clear {
+  color: var(--gdab-text-muted, var(--text-muted));
+  background: transparent;
+  border-color: transparent;
+}
+
+.gdab-drive-panel-chip.is-clear:hover {
+  color: var(--gdab-text, var(--text-normal));
+  background: var(--gdab-row-hover, var(--background-modifier-hover));
+}
+
+.gdab-drive-panel-chip-icon {
+  display: inline-flex;
+}
+
+.gdab-drive-panel-chip-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.gdab-drive-panel-chip-label {
+  max-width: 112px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gdab-drive-panel-chip-caret {
+  display: inline-flex;
+  margin-left: -1px;
+  opacity: 0.7;
+}
+
+.gdab-drive-panel-chip-caret svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* View modes (toolbar "View" menu): list (default) · compact (denser) · grid (icon cards). */
+.gdab-drive-panel-list.is-view-compact .gdab-drive-panel-row {
+  padding: 2px 6px;
+}
+
+.gdab-drive-panel-list.is-view-compact .gdab-drive-panel-row-meta {
+  display: none;
+}
+
+.gdab-drive-panel-list.is-view-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  gap: 4px;
+  align-content: start;
+}
+
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row {
+  position: relative;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  text-align: center;
+  padding: 10px 4px 8px;
+  gap: 6px;
+  background: var(--gdab-grid-card, transparent);
+}
+
+/* Grid cards may carry a themed surface (--gdab-grid-card), so re-assert hover/selection at this
+   higher specificity — otherwise the card background would swallow the interactive states. */
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row:hover {
+  background: var(--gdab-row-hover, var(--background-modifier-hover));
+}
+
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row.is-selected {
+  background: var(--gdab-row-selected, rgba(var(--gdab-accent-rgb), 0.16));
+}
+
+/* Keep the drop-target fill above a themed card surface (and above hover/selection during a drag). */
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row.is-drop-target {
+  background: rgba(var(--gdab-accent-rgb), 0.18);
+}
+
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-icon,
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-icon svg,
+.gdab-drive-panel-list.is-view-grid .gdab-custom-file-icon-img {
+  width: 40px;
+  height: 40px;
+}
+
+/* Rows with a Drive thumbnail reserve the preview frame before the lazy request completes, so the
+   type-icon fallback and the authenticated image swap without moving the card. */
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-icon.has-thumbnail-source {
+  width: 100%;
+  height: 64px;
+  overflow: hidden;
+  border-radius: var(--gdab-control-radius, var(--radius-s, 6px));
+  background: var(--gdab-secondary-surface, var(--background-secondary));
+}
+
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-icon.has-thumbnail-source svg,
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-icon.has-thumbnail-source .gdab-custom-file-icon-img {
+  width: 40px;
+  height: 40px;
+}
+
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-main {
+  width: 100%;
+  align-items: center;
+}
+
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-name {
+  font-size: var(--font-ui-smaller);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.25;
+}
+
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-meta {
+  display: none;
+}
+
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-row-actions {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+}
+
+.gdab-drive-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.gdab-drive-panel-title {
+  font-weight: 600;
+  font-family: var(--gdab-title-font, var(--font-interface));
+  letter-spacing: var(--gdab-letter-spacing, normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gdab-drive-panel-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gdab-drive-panel-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+  border-radius: var(--gdab-control-radius, var(--radius-s, 6px));
+  color: var(--gdab-text-muted, var(--text-muted));
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.gdab-drive-panel-icon-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.gdab-drive-panel-icon-button:hover:not(:disabled) {
+  color: var(--gdab-text, var(--text-normal));
+  background-color: var(--gdab-row-hover, var(--background-modifier-hover));
+}
+
+.gdab-drive-panel-icon-button:focus-visible {
+  color: var(--gdab-text, var(--text-normal));
+  outline: 2px solid var(--gdab-accent, var(--interactive-accent));
+  outline-offset: 1px;
+}
+
+.gdab-drive-panel-icon-button:active:not(:disabled) {
+  color: var(--gdab-text, var(--text-normal));
+  background-color: var(--gdab-control-active, var(--background-modifier-active-hover, var(--background-modifier-hover)));
+}
+
+.gdab-drive-panel-toolbar-btn {
+  border: 1px solid var(--gdab-divider, var(--background-modifier-border));
+  background: var(--gdab-control-surface, var(--background-modifier-form-field, var(--background-secondary)));
+}
+
+.gdab-drive-panel-toolbar-btn:hover:not(:disabled),
+.gdab-drive-panel-toolbar-btn:focus-visible {
+  border-color: var(--gdab-divider-hover, var(--background-modifier-border-hover, var(--background-modifier-border)));
+}
+
+.gdab-drive-panel-icon-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.gdab-drive-panel-icon-button:disabled:hover {
+  background-color: transparent;
+}
+
+.gdab-drive-panel-roots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.gdab-drive-panel-root-select {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.gdab-drive-panel-root-status {
+  color: var(--gdab-text-muted, var(--text-muted));
+  font-size: var(--font-ui-smaller);
+  white-space: nowrap;
+}
+
+.gdab-drive-panel-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+  font-size: var(--font-ui-smaller);
+}
+
+.gdab-drive-panel-breadcrumbs.is-editing {
+  flex-wrap: nowrap;
+}
+
+.gdab-drive-panel-breadcrumb-group {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 22ch;
+}
+
+.gdab-drive-panel-breadcrumb {
+  max-width: 16ch;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 4px;
+  border-radius: var(--gdab-control-radius, var(--radius-s));
+  color: var(--gdab-text-muted, var(--text-muted));
+  cursor: pointer;
+}
+
+.gdab-drive-panel-breadcrumb:not(.is-current):hover,
+.gdab-drive-panel-breadcrumb:not(.is-current):focus-visible {
+  background-color: var(--gdab-row-hover, var(--background-modifier-hover));
+  color: var(--gdab-text, var(--text-normal));
+  outline: none;
+}
+
+.gdab-drive-panel-breadcrumb.is-current {
+  color: var(--gdab-text, var(--text-normal));
+  font-weight: var(--font-semibold);
+  cursor: default;
+}
+
+.gdab-drive-panel-breadcrumb-menu {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  flex: 0 0 auto;
+  color: var(--gdab-text-faint, var(--text-faint));
+}
+
+.gdab-drive-panel-breadcrumb-menu svg {
+  width: 16px;
+  height: 16px;
+}
+
+.gdab-drive-panel-breadcrumb-group:hover .gdab-drive-panel-breadcrumb-menu,
+.gdab-drive-panel-breadcrumb-menu:focus-visible {
+  color: var(--gdab-text-muted, var(--text-muted));
+}
+
+.gdab-drive-panel-breadcrumb-menu:hover,
+.gdab-drive-panel-breadcrumb-menu:focus-visible {
+  background-color: var(--gdab-row-hover, var(--background-modifier-hover));
+  color: var(--gdab-text, var(--text-normal));
+  outline: none;
+}
+
+.gdab-drive-panel-breadcrumb-sep {
+  flex: 0 0 auto;
+  color: var(--gdab-text-faint, var(--text-faint));
+  user-select: none;
+}
+
+.gdab-drive-panel-breadcrumb-edit-space {
+  align-self: stretch;
+  min-width: 8px;
+  min-height: 20px;
+  flex: 1 1 12px;
+  cursor: text;
+}
+
+.gdab-drive-panel-breadcrumb-edit {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  flex: 0 0 auto;
+  color: var(--gdab-text-faint, var(--text-faint));
+}
+
+.gdab-drive-panel-breadcrumb-edit svg {
+  width: 12px;
+  height: 12px;
+}
+
+.gdab-drive-panel-breadcrumb-edit:hover,
+.gdab-drive-panel-breadcrumb-edit:focus-visible {
+  background-color: var(--gdab-row-hover, var(--background-modifier-hover));
+  color: var(--gdab-text, var(--text-normal));
+  outline: none;
+}
+
+.gdab-drive-panel-address-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  font-size: var(--font-ui-smaller);
+}
+
+.gdab-drive-panel-address-input:read-only {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.gdab-drive-panel-list {
+  min-height: 0;
+  overflow: auto;
+  flex: 1 1 auto;
+}
+
+.gdab-drive-panel-list::-webkit-scrollbar-track {
+  background-color: var(--gdab-scrollbar-track, transparent);
+}
+
+.gdab-drive-panel-list::-webkit-scrollbar-thumb {
+  background-color: var(--gdab-scrollbar-thumb, var(--scrollbar-thumb-bg));
+}
+
+.gdab-drive-panel-list::-webkit-scrollbar-thumb:hover {
+  background-color: var(--gdab-scrollbar-thumb-hover, var(--scrollbar-active-thumb-bg));
+}
+
+.gdab-drive-panel-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  padding: 5px 6px;
+  border-radius: var(--gdab-row-radius, 6px);
+}
+
+.gdab-drive-panel-row.is-folder {
+  cursor: pointer;
+}
+
+.gdab-drive-panel-row:hover {
+  background: var(--gdab-row-hover, var(--background-modifier-hover));
+}
+
+.gdab-drive-panel-row.is-selected {
+  background: var(--gdab-row-selected, rgba(var(--gdab-accent-rgb), 0.16));
+  box-shadow: inset 0 0 0 1px var(--gdab-row-selected-ring, rgba(var(--gdab-accent-rgb), 0.36));
+}
+
+.gdab-drive-panel-row:focus-visible {
+  outline: 2px solid var(--gdab-accent, var(--interactive-accent));
+  outline-offset: -2px;
+}
+
+/* The list owns keyboard focus (roving aria-activedescendant); the active row's ring is the visible
+   focus indicator, so the list itself shows no separate outline. */
+.gdab-drive-panel-list:focus-visible {
+  outline: none;
+}
+
+.gdab-drive-panel-list:focus-within .gdab-drive-panel-row.is-active {
+  box-shadow: inset 0 0 0 2px var(--gdab-accent, var(--interactive-accent));
+}
+
+.gdab-drive-panel-row-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gdab-text-muted, var(--text-muted));
+}
+
+.gdab-drive-panel-row-icon.has-thumbnail-source {
+  width: 20px;
+  height: 20px;
+  overflow: hidden;
+  border-radius: 3px;
+}
+
+.gdab-drive-panel-row-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* P5: per-type icon accents in the Drive panel (mirrors the search-result palette + drive.google.com).
+   Toggled by `panelTypeIconAccents`. Only tints currentColor (Lucide) icons; branded single-fill SVGs
+   set an inline color, full-color Word/Excel/PPT bake their fills, a folder's own Drive color is set
+   inline, and a loaded thumbnail covers the icon — all of those override or hide these. */
+.gdab-drive-panel-row-icon.is-type-accented.gdab-type-folder {
+  color: var(--gdab-type-folder, #f9ab00);
+}
+.gdab-drive-panel-row-icon.is-type-accented.gdab-type-doc {
+  color: var(--gdab-type-doc, #1a73e8);
+}
+.gdab-drive-panel-row-icon.is-type-accented.gdab-type-sheet {
+  color: var(--gdab-type-sheet, #188038);
+}
+.gdab-drive-panel-row-icon.is-type-accented.gdab-type-slides {
+  color: var(--gdab-type-slides, #f9ab00);
+}
+.gdab-drive-panel-row-icon.is-type-accented.gdab-type-form {
+  color: var(--gdab-type-form, #7248b9);
+}
+.gdab-drive-panel-row-icon.is-type-accented.gdab-type-pdf {
+  color: var(--gdab-type-pdf, #d93025);
+}
+.gdab-drive-panel-row-icon.is-type-accented.gdab-type-image {
+  color: var(--gdab-type-image, #00897b);
+}
+.gdab-drive-panel-row-icon.is-type-accented.gdab-type-audio {
+  color: var(--gdab-type-audio, #c26401);
+}
+.gdab-drive-panel-row-icon.is-type-accented.gdab-type-video {
+  color: var(--gdab-type-video, #c5221f);
+}
+.gdab-drive-panel-row-icon.is-type-accented.gdab-type-file {
+  color: var(--gdab-type-file, #5f7285);
+}
+
+.theme-dark .gdab-drive-panel-row-icon.is-type-accented.gdab-type-folder {
+  color: var(--gdab-type-folder-dark, #fdd663);
+}
+.theme-dark .gdab-drive-panel-row-icon.is-type-accented.gdab-type-doc {
+  color: var(--gdab-type-doc-dark, #8ab4f8);
+}
+.theme-dark .gdab-drive-panel-row-icon.is-type-accented.gdab-type-sheet {
+  color: var(--gdab-type-sheet-dark, #81c995);
+}
+.theme-dark .gdab-drive-panel-row-icon.is-type-accented.gdab-type-slides {
+  color: var(--gdab-type-slides-dark, #fdd663);
+}
+.theme-dark .gdab-drive-panel-row-icon.is-type-accented.gdab-type-form {
+  color: var(--gdab-type-form-dark, #c58af9);
+}
+.theme-dark .gdab-drive-panel-row-icon.is-type-accented.gdab-type-pdf {
+  color: var(--gdab-type-pdf-dark, #f28b82);
+}
+.theme-dark .gdab-drive-panel-row-icon.is-type-accented.gdab-type-image {
+  color: var(--gdab-type-image-dark, #80cbc4);
+}
+.theme-dark .gdab-drive-panel-row-icon.is-type-accented.gdab-type-audio {
+  color: var(--gdab-type-audio-dark, #fbbc04);
+}
+.theme-dark .gdab-drive-panel-row-icon.is-type-accented.gdab-type-video {
+  color: var(--gdab-type-video-dark, #ff8a80);
+}
+.theme-dark .gdab-drive-panel-row-icon.is-type-accented.gdab-type-file {
+  color: var(--gdab-type-file-dark, #9aa9b8);
+}
+
+.gdab-drive-panel-row-thumbnail {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+}
+
+.gdab-drive-panel-row-icon.is-thumbnail-ready .gdab-drive-panel-row-thumbnail {
+  animation: gdab-thumbnail-reveal 120ms ease-out forwards;
+}
+
+@keyframes gdab-thumbnail-reveal {
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gdab-drive-panel-row-icon.is-thumbnail-ready .gdab-drive-panel-row-thumbnail {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+.gdab-drive-panel-row-main {
+  min-width: 0;
+}
+
+.gdab-drive-panel-row-title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+}
+
+.gdab-drive-panel-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* Let the user drag-select + copy file/folder names (a drag is a selection, not a row click). */
+  user-select: text;
+}
+
+.gdab-drive-panel-row-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--gdab-text-muted, var(--text-muted));
+}
+
+.gdab-drive-panel-row-badge.is-starred {
+  color: var(--gdab-starred, var(--color-yellow));
+}
+
+.gdab-drive-panel-row-badge.is-shared,
+.gdab-drive-panel-row-badge.is-shared-with-me {
+  color: var(--gdab-text-faint, var(--text-faint));
+}
+
+.gdab-drive-panel-row-badge svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+.gdab-drive-panel-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  color: var(--gdab-text-muted, var(--text-muted));
+  font-size: var(--font-ui-smaller);
+  user-select: text;
+}
+
+.gdab-drive-panel-row-detail {
+  color: var(--gdab-text-muted, var(--text-muted));
+}
+
+/* Per-row actions: hover/focus-revealed like Obsidian's native file-explorer affordances. The
+   button stays laid out (opacity, not display) so revealing it never shifts the row. */
+.gdab-drive-panel-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+}
+
+.gdab-drive-panel-row:hover .gdab-drive-panel-row-actions,
+.gdab-drive-panel-row:hover .gdab-drive-panel-row-actions,
+.gdab-drive-panel-row:focus-within .gdab-drive-panel-row-actions {
+  opacity: 1;
+}
+
+.gdab-drive-panel-row-action {
+  --icon-size: 16px;
+  color: var(--gdab-text-muted, var(--text-muted));
+}
+
+.gdab-drive-panel-selection-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 4px 6px;
+  border: 1px solid var(--gdab-divider, var(--background-modifier-border));
+  border-radius: var(--gdab-bar-radius, 6px);
+  background: var(--gdab-secondary-surface, var(--background-secondary));
+}
+
+.gdab-drive-panel-selection-count {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--gdab-text-muted, var(--text-muted));
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+}
+
+.gdab-drive-panel-selection-action {
+  --icon-size: 15px;
+  color: var(--gdab-text-muted, var(--text-muted));
+}
+
+.gdab-drive-panel-selection-action.is-danger:hover {
+  color: var(--gdab-danger, var(--text-error));
+}
+
+.gdab-drive-panel-detail-bar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  border: 1px solid var(--gdab-divider, var(--background-modifier-border));
+  border-radius: var(--gdab-bar-radius, 6px);
+  background: var(--gdab-secondary-surface, var(--background-secondary));
+}
+
+.gdab-drive-panel-detail-bar:focus-visible {
+  outline: 2px solid var(--gdab-accent, var(--interactive-accent));
+  outline-offset: 1px;
+}
+
+.gdab-drive-panel-detail-bar.is-transient {
+  padding-right: 30px;
+}
+
+.gdab-drive-panel-detail-close {
+  --icon-size: 14px;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  color: var(--gdab-text-muted, var(--text-muted));
+}
+
+.gdab-drive-panel-detail-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.gdab-drive-panel-detail-thumbnail {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--gdab-divider, var(--background-modifier-border));
+  border-radius: var(--gdab-thumbnail-radius, 5px);
+  background: var(--gdab-primary-surface, var(--background-primary));
+  object-fit: cover;
+}
+
+.gdab-drive-panel-detail-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gdab-drive-panel-detail-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--gdab-text, var(--text-normal));
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+}
+
+.gdab-drive-panel-detail-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--gdab-text-muted, var(--text-muted));
+  font-size: var(--font-ui-smaller);
+}
+
+.gdab-drive-panel-detail-location {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--gdab-text-faint, var(--text-faint));
+  font-size: var(--font-ui-smaller);
+}
+
+.gdab-drive-panel-detail-extra,
+.gdab-drive-panel-detail-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--gdab-text-muted, var(--text-muted));
+  font-size: var(--font-ui-smaller);
+}
+
+.gdab-drive-panel-detail-status.is-error {
+  color: var(--gdab-danger, var(--text-error));
+}
+
+.gdab-drive-panel-state {
+  padding: 16px 4px;
+  color: var(--gdab-text-muted, var(--text-muted));
+  font-size: var(--font-ui-small);
+}
+
+.gdab-drive-panel-state.is-entering {
+  animation: gdab-state-fade-in 160ms ease-out;
+}
+
+/* Empty and error states should occupy the whole grid, not look like a file card in column one. */
+.gdab-drive-panel-list.is-view-grid > .gdab-drive-panel-state {
+  grid-column: 1 / -1;
+}
+
+.gdab-drive-panel-state-title {
+  color: var(--gdab-text, var(--text-normal));
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.gdab-drive-panel-state-detail {
+  margin-bottom: 10px;
+}
+
+/*
+ * Loading skeleton (see DrivePanelView.renderLoadingSkeleton). Shimmering placeholders that mirror the
+ * active view mode's row shape so real rows replace them with minimal layout shift. Decorative only —
+ * the visually-hidden label carries the accessible "Loading…" announcement.
+ */
+.gdab-drive-panel-skeleton-wrap {
+  animation: gdab-state-fade-in 160ms ease-out;
+}
+
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-skeleton-wrap {
+  grid-column: 1 / -1;
+}
+
+.gdab-drive-panel-skeleton-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 5px 6px;
+}
+
+.gdab-drive-panel-skeleton-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+.gdab-drive-panel-skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gdab-drive-panel-skeleton-line {
+  height: 9px;
+  border-radius: 4px;
+}
+
+.gdab-drive-panel-skeleton-line.is-name {
+  width: var(--gdab-skeleton-w, 70%);
+}
+
+.gdab-drive-panel-skeleton-line.is-meta {
+  width: 38%;
+  height: 7px;
+}
+
+/* The shimmer fill: a muted base bar with an accent-neutral sweep gliding across it. */
+.gdab-drive-panel-skeleton-block {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--gdab-skeleton-base, var(--background-modifier-border));
+}
+
+.gdab-drive-panel-skeleton-block::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--gdab-skeleton-sheen, var(--background-modifier-hover)),
+    transparent
+  );
+  animation: gdab-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes gdab-skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes gdab-state-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Compact view: denser rows, no meta line — match the real compact rows. */
+.gdab-drive-panel-list.is-view-compact .gdab-drive-panel-skeleton-row {
+  padding: 2px 6px;
+}
+
+.gdab-drive-panel-list.is-view-compact .gdab-drive-panel-skeleton-line.is-meta {
+  display: none;
+}
+
+/* Grid view: icon-card placeholders that mirror the thumbnail-frame grid. */
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-skeleton {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  gap: 4px;
+}
+
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-skeleton-row {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  padding: 10px 4px 8px;
+  gap: 6px;
+}
+
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-skeleton-icon {
+  width: 100%;
+  height: 64px;
+  border-radius: var(--gdab-control-radius, var(--radius-s, 6px));
+}
+
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-skeleton-lines {
+  width: 100%;
+  align-items: center;
+}
+
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-skeleton-line.is-name {
+  width: 80%;
+}
+
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-skeleton-line.is-meta {
+  display: none;
+}
+
+/* Accessible-only loading announcement; the shimmer is the visual indicator. */
+.gdab-drive-panel-skeleton-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gdab-drive-panel-state.is-entering,
+  .gdab-drive-panel-skeleton-wrap {
+    animation: none;
+  }
+
+  .gdab-drive-panel-skeleton-block::after {
+    animation: none;
+  }
+}
+
+.gdab-drive-panel-preview-modal h2 {
+  margin-top: 0;
+}
+
+.gdab-drive-panel-preview {
+  max-height: 70vh;
+  overflow: auto;
+}
+
+/*
+ * Quick-preview lightbox (see src/driveLightboxModal.ts): a dark, near-full-bleed overlay with the
+ * media centred. Images zoom (cursor-anchored wheel) + pan when zoomed; PDF/video sit centred.
+ */
+.modal.gdab-lightbox-modal {
+  width: 96vw;
+  height: 92vh;
+  max-width: 96vw;
+  max-height: 92vh;
+  padding: 0;
+  border: none;
+  /* Picasa-style: a translucent black that DARKENS what's behind (not a flat fill). Tuned so a white
+     area reads ~rgb(126,126,126): kdr measured 0.72 → 68, i.e. backdrop ≈ 243, so 243×(1−0.48) ≈ 126.
+     Nudge the alpha if your measurement differs. */
+  background: rgba(0, 0, 0, 0.48);
+  display: flex;
+  flex-direction: column;
+}
+
+.gdab-lightbox-modal .modal-close-button {
+  color: rgba(255, 255, 255, 0.85);
+  z-index: 1;
+}
+
+.gdab-lightbox-content {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.gdab-lightbox-viewport {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gdab-lightbox-image {
+  max-width: 100%;
+  max-height: 100%;
+  transform-origin: center center;
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.gdab-lightbox-image.gdab-lightbox-zoomable {
+  cursor: default;
+}
+
+.gdab-lightbox-image.gdab-lightbox-zoomed {
+  cursor: grab;
+}
+
+.gdab-lightbox-image.gdab-lightbox-zoomed:active {
+  cursor: grabbing;
+}
+
+.gdab-lightbox-pdf {
+  width: 92%;
+  height: 100%;
+  border: none;
+  border-radius: 6px;
+  background: var(--background-secondary);
+}
+
+.gdab-lightbox-video {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.gdab-lightbox-caption {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: var(--font-ui-small);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.gdab-lightbox-status {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: var(--font-ui-small);
+}
+
+/* In-note "## Actions" button row (drive-actions block) */
+.gdab-drive-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.gdab-drive-actions-empty {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+/* Embed "backlinks" list under the action buttons */
+.gdab-drive-backlinks {
+  margin-top: 10px;
+  font-size: var(--font-ui-small);
+}
+
+.gdab-drive-backlinks-status,
+.gdab-drive-backlinks-empty {
+  color: var(--text-muted);
+}
+
+.gdab-drive-backlinks-title {
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.gdab-drive-backlinks-list {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+/* Delete-Drive-file confirm modal */
+.gdab-trash-details {
+  margin-bottom: 12px;
+}
+
+.gdab-trash-name {
+  font-weight: var(--font-semibold);
+  overflow-wrap: anywhere;
+}
+
+.gdab-trash-warning {
+  color: var(--text-error);
+}
+
+/*
+ * Panel-drop confirm modal (see src/drivePanelView.ts → PanelDropConfirmModal): shown in
+ * `panelDropUpload: "confirm"` mode before bytes move, listing the dropped items + target folder.
+ *   .gdab-panel-drop-confirm-target    "Target: My Drive / …" breadcrumb line
+ *   .gdab-panel-drop-confirm-list      first ~12 dropped files/folders
+ *   .gdab-panel-drop-confirm-buttons   Cancel + Upload action row
+ */
+.gdab-panel-drop-confirm-target {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.gdab-panel-drop-confirm-summary {
+  margin-top: 8px;
+  font-weight: var(--font-semibold);
+}
+
+.gdab-panel-drop-confirm-list {
+  margin: 8px 0;
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+.gdab-panel-drop-confirm-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.gdab-new-folder-target {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.gdab-new-folder-input {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.gdab-new-folder-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.gdab-rename-input {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.gdab-rename-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.gdab-folder-color-detail {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.gdab-folder-color-state {
+  margin: 18px 0 12px;
+  color: var(--text-muted);
+}
+
+.gdab-folder-color-default {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 14px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.gdab-folder-color-default:hover,
+.gdab-folder-color-default:focus-visible {
+  background: var(--background-modifier-hover);
+}
+
+.gdab-folder-color-default.is-selected {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 1px var(--interactive-accent);
+}
+
+.gdab-folder-color-default-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+
+.gdab-folder-color-default-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.gdab-folder-color-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 34px);
+  gap: 10px;
+  justify-content: center;
+  margin-top: 14px;
+  padding: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+}
+
+.gdab-folder-color-swatch {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
+  border: 2px solid var(--background-primary);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--background-modifier-border);
+  transition: transform 100ms ease, box-shadow 100ms ease;
+}
+
+.gdab-folder-color-swatch:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 0 2px var(--text-muted);
+}
+
+.gdab-folder-color-swatch:focus-visible,
+.gdab-folder-color-swatch.is-selected {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--background-primary), 0 0 0 4px var(--interactive-accent);
+}
+
+.gdab-folder-color-buttons {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gdab-folder-color-swatch {
+    transition: none;
+  }
+}
+
+/*
+ * Panel delete confirm modal (see src/drivePanelView.ts → PanelDeleteConfirmModal): a recoverable
+ * "move to Drive trash" confirmation, shown for single and bulk deletes with the affected count.
+ *   .gdab-panel-delete-confirm-summary   "Move N items… restore for ~30 days" line
+ *   .gdab-panel-delete-confirm-list      first ~12 affected files/folders
+ *   .gdab-panel-delete-confirm-buttons   Cancel + Move-to-trash action row
+ */
+.gdab-panel-delete-confirm-summary {
+  overflow-wrap: anywhere;
+}
+
+.gdab-panel-delete-confirm-list {
+  margin: 8px 0;
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+}
+
+.gdab-panel-delete-confirm-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.gdab-folder-picker-detail {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.gdab-folder-picker-root-row {
+  margin-top: 12px;
+}
+
+.gdab-folder-picker-root-select {
+  width: 100%;
+}
+
+.gdab-folder-picker-breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.gdab-folder-picker-breadcrumb {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gdab-folder-picker-breadcrumb[role="button"] {
+  cursor: pointer;
+}
+
+.gdab-folder-picker-breadcrumb[role="button"]:hover,
+.gdab-folder-picker-breadcrumb[role="button"]:focus-visible {
+  color: var(--text-normal);
+  text-decoration: underline;
+}
+
+.gdab-folder-picker-breadcrumb.is-current {
+  color: var(--text-normal);
+  font-weight: var(--font-semibold);
+}
+
+.gdab-folder-picker-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  min-height: 120px;
+  margin-top: 10px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 4px;
+}
+
+.gdab-folder-picker-state {
+  padding: 10px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.gdab-folder-picker-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 6px;
+  border-radius: 5px;
+}
+
+.gdab-folder-picker-row:hover {
+  background: var(--background-modifier-hover);
+}
+
+.gdab-folder-picker-row-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+
+.gdab-folder-picker-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gdab-folder-picker-row-open {
+  --icon-size: 15px;
+  color: var(--text-muted);
+}
+
+.gdab-folder-picker-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
