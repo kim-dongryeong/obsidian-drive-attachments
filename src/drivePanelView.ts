@@ -741,7 +741,7 @@ export class DrivePanelView extends ItemView {
         } catch (error) {
           stats.failed += 1;
           stats.failedNames.push(file.name);
-          console.warn("[Drive Attachment Bridge] Drive panel upload failed.", error);
+          console.warn("[Drive Attachments] Drive panel upload failed.", error);
         }
 
         progress.setMessage(formatPanelUploadProgress(index + 1, files.length, target.name, stats));
@@ -787,7 +787,7 @@ export class DrivePanelView extends ItemView {
       try {
         plan = await walkDropEntries(entries);
       } catch (error) {
-        console.warn("[Drive Attachment Bridge] Could not read the dropped folder tree.", error);
+        console.warn("[Drive Attachments] Could not read the dropped folder tree.", error);
         summary = "Could not read the dropped folder. Try dropping it again.";
         return;
       }
@@ -822,7 +822,7 @@ export class DrivePanelView extends ItemView {
         try {
           await ensureFolder(dir);
         } catch (error) {
-          console.warn("[Drive Attachment Bridge] Could not create a Drive folder for the dropped tree.", error);
+          console.warn("[Drive Attachments] Could not create a Drive folder for the dropped tree.", error);
         }
       }
 
@@ -847,7 +847,7 @@ export class DrivePanelView extends ItemView {
         } catch (error) {
           stats.failed += 1;
           stats.failedNames.push(displayPath);
-          console.warn("[Drive Attachment Bridge] Drive panel folder upload failed.", error);
+          console.warn("[Drive Attachments] Drive panel folder upload failed.", error);
         }
 
         progress.setMessage(formatTreeUploadProgress(index + 1, total, target.name, displayPath, foldersCreated, stats));
@@ -877,7 +877,7 @@ export class DrivePanelView extends ItemView {
     try {
       return await this.dedup.findDuplicate({ md5, fileName });
     } catch (error) {
-      console.warn("[Drive Attachment Bridge] Panel upload dedup check failed; proceeding with upload.", error);
+      console.warn("[Drive Attachments] Panel upload dedup check failed; proceeding with upload.", error);
       return null;
     }
   }
@@ -2593,7 +2593,7 @@ export class DrivePanelView extends ItemView {
           updated += 1;
         } catch (error) {
           failedNames.push(item.name);
-          console.warn("[Drive Attachment Bridge] Drive panel starred update failed.", error);
+          console.warn("[Drive Attachments] Drive panel starred update failed.", error);
         }
       }
       if (this.isCurrentVirtualRoot()) {
@@ -2681,7 +2681,7 @@ export class DrivePanelView extends ItemView {
           moved += 1;
         } catch (error) {
           failedNames.push(item.name);
-          console.warn("[Drive Attachment Bridge] Drive panel move failed.", error);
+          console.warn("[Drive Attachments] Drive panel move failed.", error);
         }
       }
 
@@ -2723,7 +2723,7 @@ export class DrivePanelView extends ItemView {
           copied += 1;
         } catch (error) {
           failedNames.push(item.name);
-          console.warn("[Drive Attachment Bridge] Drive panel copy failed.", error);
+          console.warn("[Drive Attachments] Drive panel copy failed.", error);
         }
       }
 
@@ -2782,7 +2782,7 @@ export class DrivePanelView extends ItemView {
           savedPaths.push(file.path);
         } catch (error) {
           failedNames.push(item.name);
-          console.warn("[Drive Attachment Bridge] Drive panel download failed.", error);
+          console.warn("[Drive Attachments] Drive panel download failed.", error);
         }
       }
     } finally {
@@ -2830,7 +2830,7 @@ export class DrivePanelView extends ItemView {
           trashed += 1;
         } catch (error) {
           failedNames.push(item.name);
-          console.warn("[Drive Attachment Bridge] Drive panel trash failed.", error);
+          console.warn("[Drive Attachments] Drive panel trash failed.", error);
         }
       }
       await this.loadCurrentFolder(true);
@@ -2990,7 +2990,7 @@ export class DrivePanelView extends ItemView {
         try {
           thumbnailUrl = await this.withAccessToken(metadata.thumbnailLink);
         } catch (error) {
-          console.warn("[Drive Attachment Bridge] Drive panel thumbnail token failed.", error);
+          console.warn("[Drive Attachments] Drive panel thumbnail token failed.", error);
         }
       }
       this.detailMetadataCache.set(fileId, { metadata, thumbnailUrl });
@@ -3171,7 +3171,7 @@ export class DrivePanelView extends ItemView {
           restored += 1;
         } catch (error) {
           failedNames.push(item.name);
-          console.warn("[Drive Attachment Bridge] Drive panel restore failed.", error);
+          console.warn("[Drive Attachments] Drive panel restore failed.", error);
         }
       }
       this.folderCache.delete(STARRED_ROOT.id);
@@ -3213,7 +3213,7 @@ export class DrivePanelView extends ItemView {
           deleted += 1;
         } catch (error) {
           failedNames.push(item.name);
-          console.warn("[Drive Attachment Bridge] Drive panel permanent delete failed.", error);
+          console.warn("[Drive Attachments] Drive panel permanent delete failed.", error);
         }
       }
       this.folderCache.delete(STARRED_ROOT.id);
@@ -3733,7 +3733,7 @@ export class DrivePanelView extends ItemView {
       });
     } catch (error) {
       this.thumbnailFailures.add(fileId);
-      console.warn("[Drive Attachment Bridge] Drive panel thumbnail failed; keeping the type icon.", error);
+      console.warn("[Drive Attachments] Drive panel thumbnail failed; keeping the type icon.", error);
     }
   }
 

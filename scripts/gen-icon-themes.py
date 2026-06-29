@@ -204,7 +204,7 @@ row_h, top = 26, 70
 W, H = 18 + col_w * len(STYLES) + 2, top + row_h * len(NAMES) + 16
 parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" font-family="{FONT}">']
 parts.append(f'<rect x="1" y="1" width="{W-2}" height="{H-2}" rx="16" fill="#f7f8fa" stroke="#e3e5e8"/>')
-parts.append(f'<text x="18" y="34" font-size="15" font-weight="700" fill="#23262b">Drive Attachment Bridge — 커스텀 아이콘 세트</text>')
+parts.append(f'<text x="18" y="34" font-size="15" font-weight="700" fill="#23262b">Drive Attachments — 커스텀 아이콘 세트</text>')
 for s in STYLES:
     parts.append(f'<text x="{colx[s]+30}" y="56" font-size="11" font-weight="700" letter-spacing=".5" fill="#5b6470">{HEADW[s].upper()}</text>')
 for i, n in enumerate(NAMES):

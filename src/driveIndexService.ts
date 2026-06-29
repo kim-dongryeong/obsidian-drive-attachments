@@ -184,7 +184,7 @@ export class DriveIndexService {
       if (this.hasChangePageToken() && !this.needsFullRebuild()) {
         return this.syncChanges().catch((error: unknown) => {
           console.warn(
-            "[Drive Attachment Bridge] Drive changes sync failed; rebuilding the full index.",
+            "[Drive Attachments] Drive changes sync failed; rebuilding the full index.",
             error,
           );
           return this.refresh();
@@ -236,7 +236,7 @@ export class DriveIndexService {
           await this.buildFolderIndex();
         } catch (error: unknown) {
           console.warn(
-            "[Drive Attachment Bridge] Folder index crawl failed; deep paths may stay incomplete.",
+            "[Drive Attachments] Folder index crawl failed; deep paths may stay incomplete.",
             error,
           );
         }
@@ -244,7 +244,7 @@ export class DriveIndexService {
         try {
           await this.fetchStartPageToken();
         } catch (error: unknown) {
-          console.warn("[Drive Attachment Bridge] Could not mint Drive changes start token.", error);
+          console.warn("[Drive Attachments] Could not mint Drive changes start token.", error);
         }
         // Stamp the success time only when the build actually ran to completion. Doing this in
         // `finally` would mark a failed/partial load as "freshly loaded", so `ensureLoaded` would
@@ -363,7 +363,7 @@ export class DriveIndexService {
     if (pageToken) {
       this.capped = true;
       console.warn(
-        `[Drive Attachment Bridge] Drive index stopped after ${maxPages} pages (${this.items.length} items). Raise the index page limit in settings to include older files.`,
+        `[Drive Attachments] Drive index stopped after ${maxPages} pages (${this.items.length} items). Raise the index page limit in settings to include older files.`,
       );
     }
   }
@@ -400,7 +400,7 @@ export class DriveIndexService {
 
     // Cap hit (more than 50k folders): keep what we have — some deep paths may stay incomplete.
     console.warn(
-      `[Drive Attachment Bridge] Folder index stopped after ${DRIVE_FOLDER_INDEX_MAX_PAGES} pages (${folders.length} folders). Some deep paths may stay incomplete.`,
+      `[Drive Attachments] Folder index stopped after ${DRIVE_FOLDER_INDEX_MAX_PAGES} pages (${folders.length} folders). Some deep paths may stay incomplete.`,
     );
     this.folderIndex = folders;
   }

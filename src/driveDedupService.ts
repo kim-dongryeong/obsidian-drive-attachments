@@ -143,7 +143,7 @@ export class DriveDedupService {
     const outcome = await this.waitForIndexLoad();
     if (outcome === "timeout") {
       console.warn(
-        `[Drive Attachment Bridge] Drive index not ready within ${DRIVE_DEDUP_INDEX_WAIT_MS / 1000}s; upload dedup scans the partial index and falls through to the name lookup. The index load continues for the next upload.`,
+        `[Drive Attachments] Drive index not ready within ${DRIVE_DEDUP_INDEX_WAIT_MS / 1000}s; upload dedup scans the partial index and falls through to the name lookup. The index load continues for the next upload.`,
       );
     }
 
@@ -166,7 +166,7 @@ export class DriveDedupService {
           () => "loaded" as const,
           (error: unknown) => {
             console.warn(
-              "[Drive Attachment Bridge] Upload dedup index load failed; scanning whatever is cached.",
+              "[Drive Attachments] Upload dedup index load failed; scanning whatever is cached.",
               error,
             );
             return "failed" as const;
@@ -195,7 +195,7 @@ export class DriveDedupService {
       const contains = await this.findDriveFileByQuery(accessToken, buildContainsNameQuery(baseName), input.md5);
       return contains ? this.buildHit(input, "drive-name", contains) : null;
     } catch (error) {
-      console.warn("[Drive Attachment Bridge] Upload dedup name lookup failed; proceeding without this layer.", error);
+      console.warn("[Drive Attachments] Upload dedup name lookup failed; proceeding without this layer.", error);
       return null;
     }
   }
@@ -212,7 +212,7 @@ export class DriveDedupService {
 
       if (response.status < 200 || response.status >= 300) {
         console.warn(
-          `[Drive Attachment Bridge] Upload dedup name lookup failed with HTTP ${response.status}; proceeding without this layer.`,
+          `[Drive Attachments] Upload dedup name lookup failed with HTTP ${response.status}; proceeding without this layer.`,
         );
         return null;
       }
@@ -229,7 +229,7 @@ export class DriveDedupService {
     }
 
     console.warn(
-      `[Drive Attachment Bridge] Upload dedup name lookup stopped after ${DRIVE_DEDUP_MAX_QUERY_PAGES} pages without an md5 match; proceeding as no duplicate.`,
+      `[Drive Attachments] Upload dedup name lookup stopped after ${DRIVE_DEDUP_MAX_QUERY_PAGES} pages without an md5 match; proceeding as no duplicate.`,
     );
     return null;
   }
@@ -390,5 +390,5 @@ function escapeDriveQueryString(value: string): string {
 }
 
 function logDedupLayer(layer: DriveDedupSource, fileName: string, result: "hit" | "miss"): void {
-  console.debug(`[Drive Attachment Bridge] Upload dedup ${layer} ${result}: ${fileName}`);
+  console.debug(`[Drive Attachments] Upload dedup ${layer} ${result}: ${fileName}`);
 }

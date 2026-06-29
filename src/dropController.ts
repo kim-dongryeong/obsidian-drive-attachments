@@ -340,7 +340,7 @@ export class DropController {
         fileName,
       });
     } catch (error) {
-      console.warn("[Drive Attachment Bridge] Upload dedup check failed; proceeding with upload.", error);
+      console.warn("[Drive Attachments] Upload dedup check failed; proceeding with upload.", error);
       return null;
     }
   }

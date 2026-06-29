@@ -211,7 +211,7 @@ export class DrivePreviewService {
     try {
       resolved = await this.resolveTarget(id, ctx);
     } catch (error) {
-      console.warn("[Drive Attachment Bridge] Drive preview target lookup failed.", error);
+      console.warn("[Drive Attachments] Drive preview target lookup failed.", error);
       el.empty();
       this.renderCard(el, {
         title: "Drive preview unavailable",
@@ -271,7 +271,7 @@ export class DrivePreviewService {
     } catch (error) {
       // Auth error, HTTP 4xx/5xx, network failure, or an oversized file whose size we couldn't
       // know up front: fall back to thumbnail + "Open in Drive" rather than a dead-end error.
-      console.warn("[Drive Attachment Bridge] Drive image fetch failed; using fallback.", error);
+      console.warn("[Drive Attachments] Drive image fetch failed; using fallback.", error);
       await this.renderFallback(el, target, error instanceof Error ? error.message : String(error), ctx);
     }
   }
@@ -330,7 +330,7 @@ export class DrivePreviewService {
       await this.renderFallback(host, target, "");
       return null;
     } catch (error) {
-      console.warn("[Drive Attachment Bridge] Drive lightbox fetch failed; using fallback.", error);
+      console.warn("[Drive Attachments] Drive lightbox fetch failed; using fallback.", error);
       await this.renderFallback(host, target, error instanceof Error ? error.message : String(error));
       return null;
     }
@@ -352,7 +352,7 @@ export class DrivePreviewService {
       // No card under the PDF — the iframe IS the preview, and the hover toolbar already has
       // "Open in Drive" (matches the image/video embed: media + hover affordances, no chrome).
     } catch (error) {
-      console.warn("[Drive Attachment Bridge] Drive PDF fetch failed; using fallback.", error);
+      console.warn("[Drive Attachments] Drive PDF fetch failed; using fallback.", error);
       await this.renderFallback(el, target, error instanceof Error ? error.message : String(error), ctx);
     }
   }
@@ -366,7 +366,7 @@ export class DrivePreviewService {
         void this.renderFallback(el, target, "Video preview failed to render.", ctx);
       };
     } catch (error) {
-      console.warn("[Drive Attachment Bridge] Drive video fetch failed; using fallback.", error);
+      console.warn("[Drive Attachments] Drive video fetch failed; using fallback.", error);
       await this.renderFallback(el, target, error instanceof Error ? error.message : String(error), ctx);
     }
   }
@@ -949,7 +949,7 @@ export class DrivePreviewService {
     try {
       await this.app.vault.process(file, (text) => rewriteFenceSize(text, info.lineStart, info.lineEnd, size));
     } catch (error) {
-      console.warn("[Drive Attachment Bridge] Could not persist preview size.", error);
+      console.warn("[Drive Attachments] Could not persist preview size.", error);
     }
   }
 
@@ -1084,7 +1084,7 @@ export class DrivePreviewService {
       try {
         thumbnailLink = await this.withAccessToken(target.thumbnailLink);
       } catch (error) {
-        console.warn("[Drive Attachment Bridge] Drive thumbnail token failed; showing card only.", error);
+        console.warn("[Drive Attachments] Drive thumbnail token failed; showing card only.", error);
         thumbnailLink = null;
       }
     }

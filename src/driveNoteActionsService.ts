@@ -93,7 +93,7 @@ export class DriveNoteActionsService {
       });
     } catch (error) {
       // The Drive file is already gone; failing to annotate the note is non-fatal.
-      console.warn("[Drive Attachment Bridge] Could not stamp deletion state on the note.", error);
+      console.warn("[Drive Attachments] Could not stamp deletion state on the note.", error);
     }
   }
 

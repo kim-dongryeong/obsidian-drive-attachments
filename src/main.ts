@@ -561,7 +561,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
         fileName,
       });
     } catch (error) {
-      console.warn("[Drive Attachment Bridge] Upload dedup check failed; proceeding with upload.", error);
+      console.warn("[Drive Attachments] Upload dedup check failed; proceeding with upload.", error);
       return null;
     }
   }
@@ -641,7 +641,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
   private openSettingsTab(): void {
     const setting = (this.app as AppWithSettings).setting;
     if (!setting) {
-      new Notice("Open Google Drive Attachment Bridge settings to enable Drive browsing.");
+      new Notice("Open Drive Attachments settings to enable Drive browsing.");
       return;
     }
     setting.openTabById(this.manifest.id);
