@@ -1,4 +1,4 @@
-# Secrets — NEVER commit (see AGENTS.md hard rules)
+# Secrets — NEVER commit (OAuth client secret + tokens)
 data.json
 **/data.json
 *.token
@@ -9,10 +9,6 @@ data.json
 dist/
 node_modules/
 main.js
-
-# Autonomous loop — local infra, not part of the project
-auto-loop.sh
-logs/
 
 # OS
 .DS_Store

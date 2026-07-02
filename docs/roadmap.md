@@ -182,16 +182,16 @@ folder cannot be picked even though Computers files appear in search and dedup.
 
 ## Pre-publish decisions (decide before community submit)
 
-- **Plugin name + id.** Current: "Drive Attachments" (id `drive-attachment-bridge`).
-  kdr to re-decide before publishing — candidates: `DriveAttach`, `Drive Attachment`, etc. The
-  final name drives the manifest `id` and the code-block-language prefix below.
-- **Namespace the code-block languages.** Today the processors register the generic languages
-  `drive-preview` and `drive-actions`. `registerMarkdownCodeBlockProcessor` allows only ONE
-  processor per language, so another Drive-related plugin registering the same string would
-  collide (last one loaded wins). Before publish, rename to a unique prefix derived from the final
-  plugin name (e.g. `gdab-preview` / `gdab-actions`). Migration: register the OLD languages too
-  (read-compat) so existing notes keep rendering, but emit only the new language in
-  `formatPreviewSection` / `formatActionsSection` / `embedPreview` / `createAssetNoteAndEmbed`.
+- ✅ **Plugin name + id — DONE (2026-06-30).** Final: name **"Drive Attachments"**, id
+  **`drive-attachments`**, repo `obsidian-drive-attachments`. Internal identifiers (the `gdab-`
+  CSS prefix, the `drive-attachment-bridge-panel` view type) intentionally keep the legacy
+  namespace — renaming them would break existing vaults' saved workspace layouts for zero
+  user-visible gain.
+- ✅ **Namespace the code-block languages — DONE (0.70.0, 2026-07-02).** New inserts emit
+  `drive-attachments-preview` / `drive-attachments-actions`; the legacy generic `drive-preview` /
+  `drive-actions` remain registered AND detected (read-compat) so pre-rename notes keep rendering,
+  and re-inserting/normalizing an old block upgrades it. Languages centralized in
+  `src/codeBlockLang.ts`.
 
 - **Replace Google's filetype icons.** The non-preview card uses Google Drive's own filetype badge
   SVG (currently just the PDF one, `GOOGLE_PDF_ICON` in `drivePreviewService.ts`) — Google's product

@@ -51,8 +51,11 @@ shared with a third-party server.
 4. In the plugin settings, paste the *Client ID*, *Client Secret*, *Picker API key*, and
    *App ID*, then authorize your Google account.
 
-Your credentials and tokens are stored locally in the plugin's `data.json` and are **never
-committed** — keep that file private.
+Your credentials and tokens are stored locally in
+`<vault>/.obsidian/plugins/drive-attachments/data.json`. The client secret and access token sit
+there in **plaintext** (the refresh token is encrypted via Electron `safeStorage` when available),
+so treat the file like a password: exclude it from vault sync/backups you share and from any Git
+repo tracking your vault.
 
 ## Development
 

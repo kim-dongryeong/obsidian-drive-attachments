@@ -55,6 +55,9 @@ import { DriveUploadService } from "./driveUploadService";
 import { DriveFileOpsService } from "./driveFileOpsService";
 import { DriveThumbnailService } from "./driveThumbnailService";
 
+// Legacy internal id from the pre-rename era ("Drive Attachment Bridge") — kept so existing vaults'
+// saved workspace layouts still resolve this view. Same for the `gdab-` CSS/MIME prefixes: internal
+// namespaces, not user-visible; renaming them buys nothing and breaks compatibility.
 export const DRIVE_PANEL_VIEW_TYPE = "drive-attachment-bridge-panel";
 
 interface DrivePanelLocation {

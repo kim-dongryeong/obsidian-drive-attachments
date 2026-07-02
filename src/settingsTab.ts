@@ -424,7 +424,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
       .setName("Drag-out format")
       .setDesc(
         "What dragging a Drive panel row (or selection) out onto a note inserts at the drop point. " +
-          "“Inline link” inserts a Markdown link; “Embed preview” inserts a drive-preview block for " +
+          "“Inline link” inserts a Markdown link; “Embed preview” inserts a preview embed block for " +
           "files (folders fall back to a link); “Drive-link note” creates the asset note and inserts a " +
           "wikilink to it. Hold a modifier AT THE DROP to override per-drag — ⌘/Ctrl → Drive-link note · " +
           "⌥/Alt → embed preview · ⇧ Shift → inline link. (In-panel drag onto a folder still moves/copies.)",
@@ -710,7 +710,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
         .setName("Add a preview block to new Drive-link notes")
         .setDesc(
           "When a new Drive-link note is created (or re-linked) for an image, add a “## Preview” " +
-            "section with a drive-preview block that embeds the image inline. Images only — other " +
+            "section with a preview block that embeds the image inline. Images only — other " +
             `file types are unaffected, and existing notes change only when re-linked.${assetNoteOnlyHint}`,
         )
         .addToggle((toggle) => {

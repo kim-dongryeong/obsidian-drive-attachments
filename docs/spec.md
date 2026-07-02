@@ -1,8 +1,8 @@
 # Spec snapshot — Drive Attachments
 
-Condensed snapshot of the agreed design. The **living** version (with full Claude/Codex review
-threads) is in the vault: `~/notes/brain/Google Drive attachment bridge plugin spec.md`.
-For the *decisions* distilled from it, see [decisions.md](decisions.md).
+Condensed snapshot of the agreed design. The **living** version (with full review threads) lives
+in the maintainer's private notes. For the *decisions* distilled from it, see
+[decisions.md](decisions.md).
 
 ## Problem
 
