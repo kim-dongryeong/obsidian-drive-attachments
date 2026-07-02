@@ -4,8 +4,10 @@
 // code-block processor for an empty fence. Mirrors the additive, never-duplicated upsert used by the
 // preview block and the path log.
 
+import { ACTIONS_LANG } from "./codeBlockLang";
+
 export const ACTIONS_HEADING = "## Actions";
-const ACTIONS_FENCE_OPEN = "```drive-actions";
+const ACTIONS_FENCE_OPEN = "```" + ACTIONS_LANG;
 const ACTIONS_FENCE_CLOSE = "```";
 
 function actionsFenceBody(driveId: string): string[] {

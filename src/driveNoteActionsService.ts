@@ -2,6 +2,7 @@ import { App, ButtonComponent, MarkdownPostProcessorContext, Notice, TFile } fro
 import { DriveMetadataService } from "./driveMetadataService";
 import { askDriveTrashAction } from "./driveTrashModal";
 import { DriveScopeError, DriveTrashService } from "./driveTrashService";
+import { PREVIEW_LANGS } from "./codeBlockLang";
 import { GoogleDriveAttachmentBridgeSettings } from "./settings";
 
 const DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/";
@@ -225,7 +226,9 @@ export class DriveNoteActionsService {
 // to it). Restricting to the fence avoids false positives where the id merely appears in prose or
 // frontmatter elsewhere (e.g. a verbatim chat transcript).
 function countDrivePreviewEmbeds(content: string, driveId: string): number {
-  const fenceRe = /```+drive-preview[^\n]*\n([\s\S]*?)```/g;
+  // Match the namespaced language AND the legacy one (read-compat), so backlink counts stay correct
+  // for notes written before and after the rename.
+  const fenceRe = new RegExp("```+(?:" + PREVIEW_LANGS.join("|") + ")[^\\n]*\\n([\\s\\S]*?)```", "g");
   let count = 0;
   let match: RegExpExecArray | null;
   while ((match = fenceRe.exec(content)) !== null) {

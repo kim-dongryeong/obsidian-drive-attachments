@@ -19,6 +19,7 @@ import { upsertActionsSection } from "./actionsSection";
 import { DriveNoteActionsService } from "./driveNoteActionsService";
 import { DropController, makeUploadPlaceholder, replacePlaceholder } from "./dropController";
 import { PanelDragModifierTracker } from "./panelDragModifierTracker";
+import { ACTIONS_LANGS, PREVIEW_LANGS } from "./codeBlockLang";
 import { InsertService } from "./insertService";
 import { openMigrateNoteAttachmentsPreview } from "./migrateNoteAttachments";
 import { DEFAULT_SETTINGS, GoogleDriveAttachmentBridgeSettings } from "./settings";
@@ -117,13 +118,15 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
       void this.openDrivePanel();
     });
 
-    this.registerMarkdownCodeBlockProcessor("drive-preview", (source, el, ctx) =>
-      this.preview.render(source, el, ctx),
-    );
-
-    this.registerMarkdownCodeBlockProcessor("drive-actions", (source, el, ctx) =>
-      this.noteActions.renderActionsBlock(source, el, ctx),
-    );
+    // Register the namespaced language AND the legacy generic one (read-compat for pre-rename notes).
+    for (const lang of PREVIEW_LANGS) {
+      this.registerMarkdownCodeBlockProcessor(lang, (source, el, ctx) => this.preview.render(source, el, ctx));
+    }
+    for (const lang of ACTIONS_LANGS) {
+      this.registerMarkdownCodeBlockProcessor(lang, (source, el, ctx) =>
+        this.noteActions.renderActionsBlock(source, el, ctx),
+      );
+    }
 
     // M5: intercept local-file drops so we can offer "upload to Drive" instead of a vault copy.
     // The handler MUST stay synchronous up to preventDefault (D3) — DropController enforces that,

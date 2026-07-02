@@ -6,8 +6,10 @@
 // `drive-preview` block silently renders nothing. Mirrors the in-place section replacement used by the
 // path log and export links (additive, never duplicated).
 
+import { PREVIEW_LANG } from "./codeBlockLang";
+
 export const PREVIEW_HEADING = "## Preview";
-const PREVIEW_FENCE_OPEN = "```drive-preview";
+const PREVIEW_FENCE_OPEN = "```" + PREVIEW_LANG;
 const PREVIEW_FENCE_CLOSE = "```";
 
 // The preview is image-only by design (PDF/other previews are best-effort fallbacks, not something

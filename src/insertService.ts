@@ -10,6 +10,7 @@ import {
 import { assertValidDrivePickerItem, isDriveFolder, DrivePickerItem } from "./driveTypes";
 import { formatExportLinksSection, upsertExportLinksSection } from "./exportLinksSection";
 import { formatActionsSection, upsertActionsSection } from "./actionsSection";
+import { PREVIEW_LANG } from "./codeBlockLang";
 import { formatPreviewSection, upsertPreviewSection } from "./previewSection";
 import { DriveAuthService } from "./driveAuthService";
 import { DriveMetadata, DriveMetadataService } from "./driveMetadataService";
@@ -85,7 +86,7 @@ export class InsertService {
   // Build a `drive-preview` EMBED block for a Drive file WITHOUT inserting it or creating the asset
   // note — matches the panel's "Embed preview" row action. Also used by the panel drag-OUT flow.
   formatDriveEmbedBlock(driveId: string): string {
-    return ["```drive-preview", driveId, "width: 480", "```"].join("\n");
+    return ["```" + PREVIEW_LANG, driveId, "width: 480", "```"].join("\n");
   }
 
   // Insert an inline `drive-preview` EMBED (and ensure the asset note exists for metadata/dedup). Used
@@ -143,7 +144,7 @@ export class InsertService {
   ): Promise<string> {
     assertValidDrivePickerItem(item);
     await this.openOrCreateAssetNoteFile(item, sourceFile, origin);
-    return ["```drive-preview", item.id, "width: 480", "```"].join("\n");
+    return ["```" + PREVIEW_LANG, item.id, "width: 480", "```"].join("\n");
   }
 
   async attachPickedFolderToFrontmatter(file: TFile): Promise<void> {

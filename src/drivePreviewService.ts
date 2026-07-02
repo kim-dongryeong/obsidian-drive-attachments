@@ -6,6 +6,7 @@ import { brandedFileIcon, type CustomFileIconResolver } from "./driveFileIcon";
 import { bundledIconForFile } from "./iconThemes";
 import { DriveNoteActionsService } from "./driveNoteActionsService";
 import { DrivePickerItem } from "./driveTypes";
+import { PREVIEW_LANGS } from "./codeBlockLang";
 import { InsertService } from "./insertService";
 import { GoogleDriveAttachmentBridgeSettings } from "./settings";
 
@@ -76,7 +77,8 @@ function rewriteFenceSize(
   if (lineStart < 0 || lineEnd >= lines.length || lineStart >= lineEnd) {
     return text;
   }
-  if (!lines[lineStart].trimStart().toLowerCase().startsWith("```drive-preview")) {
+  const opener = lines[lineStart].trimStart().toLowerCase();
+  if (!PREVIEW_LANGS.some((lang) => opener.startsWith("```" + lang))) {
     return text;
   }
   if (size.height !== undefined) {

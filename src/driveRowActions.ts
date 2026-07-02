@@ -2,6 +2,7 @@ import { App, Editor, Menu, Notice, TFile } from "obsidian";
 import { DriveLightboxModal } from "./driveLightboxModal";
 import { DrivePreviewService } from "./drivePreviewService";
 import { DRIVE_FOLDER_MIME_TYPE, DrivePickerItem } from "./driveTypes";
+import { PREVIEW_LANG } from "./codeBlockLang";
 import { InsertService } from "./insertService";
 
 // The minimal item shape the row-action menu needs. The panel's `DriveBrowserItem`, the index
@@ -173,7 +174,7 @@ export function embedDriveItemPreview(item: DriveActionItem, context: DriveRowAc
   // A fenced block must start at column 0 to parse, so break the line first if the cursor isn't there.
   // The `width:` line is the default size and is left in so the user can adjust it inline.
   const prefix = target.editor.getCursor().ch > 0 ? "\n" : "";
-  target.editor.replaceSelection(`${prefix}\`\`\`drive-preview\n${item.id}\nwidth: 480\n\`\`\`\n`);
+  target.editor.replaceSelection(`${prefix}\`\`\`${PREVIEW_LANG}\n${item.id}\nwidth: 480\n\`\`\`\n`);
   new Notice(`Embedded Drive ${isFolder ? "folder card" : "preview"}: ${item.name}`);
 }
 
