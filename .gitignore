@@ -14,5 +14,8 @@ main.js
 AGENTS.md
 CLAUDE.md
 
+# Editor — personal, not shipped
+.vscode/
+
 # OS
 .DS_Store
