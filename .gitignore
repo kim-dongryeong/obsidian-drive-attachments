@@ -10,5 +10,9 @@ dist/
 node_modules/
 main.js
 
+# Local dev guide — not shipped
+AGENTS.md
+CLAUDE.md
+
 # OS
 .DS_Store
