@@ -1896,7 +1896,7 @@ export class DrivePanelView extends ItemView {
     switch (evt.key) {
       case "ArrowDown":
         evt.preventDefault();
-        this.moveActiveCursor(1, evt.shiftKey);
+        this.moveActiveCursor(this.verticalStep(), evt.shiftKey);
         return;
       case "ArrowUp":
         evt.preventDefault();
@@ -1905,15 +1905,42 @@ export class DrivePanelView extends ItemView {
           this.navigateUp();
           return;
         }
+        this.moveActiveCursor(-this.verticalStep(), evt.shiftKey);
+        return;
+      case "ArrowRight":
+        // Left/Right only navigate within the 2-D grid; in the single-column list/compact views the
+        // horizontal arrows are left alone so they don't jump the cursor by a whole row.
+        if (this.getSettings().panelViewMode !== "grid") {
+          return;
+        }
+        evt.preventDefault();
+        this.moveActiveCursor(1, evt.shiftKey);
+        return;
+      case "ArrowLeft":
+        if (this.getSettings().panelViewMode !== "grid") {
+          return;
+        }
+        evt.preventDefault();
         this.moveActiveCursor(-1, evt.shiftKey);
         return;
       case "Enter":
         evt.preventDefault();
         this.activateActiveItem();
         return;
+      case "Delete":
+        // Windows/Linux Delete (and mac fn-Delete) → send the selection to Drive's trash, matching
+        // the row menu's "Move to trash" (or "Delete forever" when already inside the Trash view).
+        evt.preventDefault();
+        this.trashSelectionFromKeyboard();
+        return;
       case "Backspace":
         evt.preventDefault();
-        this.navigateUp();
+        if (evt.metaKey || evt.ctrlKey) {
+          // macOS Cmd-Delete (⌘⌫) is the platform "move to trash" gesture; Ctrl-Backspace mirrors it.
+          this.trashSelectionFromKeyboard();
+        } else {
+          this.navigateUp();
+        }
         return;
       default:
         if (this.handleTypeAheadKey(evt)) {
@@ -2019,6 +2046,50 @@ export class DrivePanelView extends ItemView {
       this.selectRangeTo(target.id, true);
     } else {
       this.selectOnly(target.id, true);
+    }
+  }
+
+  // Vertical arrow step: one item in the single-column list/compact views, a full row (the live
+  // column count) in the responsive grid so ↑/↓ move between rows and ←/→ move within a row.
+  private verticalStep(): number {
+    return this.getSettings().panelViewMode === "grid" ? this.gridColumnCount() : 1;
+  }
+
+  // Count the columns actually laid out in the grid by measuring how many rows share the first row's
+  // top edge. The grid is `repeat(auto-fill, …)`, so the column count depends on the panel's current
+  // width — read it from the DOM rather than assume a fixed number.
+  private gridColumnCount(): number {
+    const list = this.listEl;
+    if (!list) {
+      return 1;
+    }
+    const rows = Array.from(list.querySelectorAll<HTMLElement>(".gdab-drive-panel-row"));
+    if (rows.length <= 1) {
+      return Math.max(1, rows.length);
+    }
+    const firstTop = rows[0].offsetTop;
+    let columns = 0;
+    for (const row of rows) {
+      if (row.offsetTop !== firstTop) {
+        break;
+      }
+      columns += 1;
+    }
+    return Math.max(1, columns);
+  }
+
+  // Keyboard delete: move the current selection to Drive's trash (or permanently delete when the
+  // Trash view is open), reusing the same confirmation + scope guard as the row menu. The scope guard
+  // (ensureCanModifyDrive) surfaces the right message when Full Drive access is off or not yet granted.
+  private trashSelectionFromKeyboard(): void {
+    const selected = this.getCurrentItems().filter((item) => this.selectedItemIds.has(item.id));
+    if (selected.length === 0) {
+      return;
+    }
+    if (this.isInTrashPath()) {
+      this.confirmDeleteForever(selected);
+    } else {
+      this.confirmTrashItems(selected);
     }
   }
 
@@ -2443,7 +2514,29 @@ export class DrivePanelView extends ItemView {
       return true;
     }
 
-    new Notice("Enable Full Drive access in settings, then reconnect, to modify Drive files.");
+    if (!this.auth.isConnected) {
+      new Notice("Connect Google Drive first to delete or modify files.", 8000);
+      return false;
+    }
+
+    if (!this.getSettings().enableFullDriveAccess) {
+      // Opt-in is off: the default drive.file scope can't touch files the plugin didn't upload.
+      new Notice(
+        "To delete or modify Drive files, turn on “Full Drive access” in the Drive Attachments " +
+          "settings, then reconnect (Disconnect → Connect).",
+        10_000,
+      );
+      return false;
+    }
+
+    // Opted in, but Google never actually granted the full-Drive scope — the user most likely hasn't
+    // added it on their consent screen yet, or hasn't reconnected since. Point them at the exact fix.
+    new Notice(
+      "“Full Drive access” is on, but Google hasn't granted the full-Drive scope yet. Add the " +
+        "https://www.googleapis.com/auth/drive scope in the Google Cloud console (Google Auth " +
+        "Platform → Data Access), then Disconnect and Connect again in settings.",
+      12_000,
+    );
     return false;
   }
 
@@ -3002,7 +3095,9 @@ export class DrivePanelView extends ItemView {
     } finally {
       this.detailMetadataLoadingIds.delete(fileId);
       if (this.isOnlySelected(fileId)) {
-        this.render();
+        // Only the detail bar's contents changed — refresh it without rebuilding the row list (which
+        // would re-decode the grid thumbnails and flicker). Falls back to a full render if list is gone.
+        this.refreshSelectionOnly(false);
       }
     }
   }
@@ -3254,7 +3349,7 @@ export class DrivePanelView extends ItemView {
     this.selectionAnchorId = itemId;
     this.activeItemId = itemId;
     if (render) {
-      this.render();
+      this.refreshSelectionOnly(this.consumeScrollActive());
     }
   }
 
@@ -3267,7 +3362,7 @@ export class DrivePanelView extends ItemView {
     this.selectionAnchorId = itemId;
     this.activeItemId = itemId;
     if (render) {
-      this.render();
+      this.refreshSelectionOnly(this.consumeScrollActive());
     }
   }
 
@@ -3292,7 +3387,7 @@ export class DrivePanelView extends ItemView {
     }
     this.activeItemId = itemId;
     if (render) {
-      this.render();
+      this.refreshSelectionOnly(this.consumeScrollActive());
     }
   }
 
@@ -3307,7 +3402,7 @@ export class DrivePanelView extends ItemView {
       this.activeItemId = items[0].id;
     }
     if (render) {
-      this.render();
+      this.refreshSelectionOnly(this.consumeScrollActive());
     }
   }
 
@@ -3450,6 +3545,60 @@ export class DrivePanelView extends ItemView {
     }
 
     this.populateRows(list, this.folderCache.get(this.currentLocation.id) ?? [], false);
+  }
+
+  // A selection/cursor move changes WHICH rows are selected/active, not which rows exist. A full
+  // render() (or refreshListOnly()) would empty and rebuild the list, recreating every row's icon —
+  // including cached thumbnail <img>s, which then re-decode and fade in again, so the grid flickers on
+  // every arrow keypress. Instead, toggle the state classes on the existing rows in place and rebuild
+  // only the bottom bars (which mirror the selection and carry no thumbnails). Falls back to a full
+  // render when the list isn't mounted yet.
+  private refreshSelectionOnly(scrollActive: boolean): void {
+    const list = this.listEl;
+    if (!list) {
+      this.render();
+      return;
+    }
+
+    let activeRow: HTMLElement | null = null;
+    list.removeAttribute("aria-activedescendant");
+    for (const row of Array.from(list.querySelectorAll<HTMLElement>(".gdab-drive-panel-row"))) {
+      const id = row.dataset.itemId;
+      if (!id) {
+        continue;
+      }
+      const isSelected = this.selectedItemIds.has(id);
+      const isActive = this.activeItemId === id;
+      row.toggleClass("is-selected", isSelected);
+      row.toggleClass("is-active", isActive);
+      row.setAttribute("aria-selected", isSelected ? "true" : "false");
+      if (isActive) {
+        activeRow = row;
+        list.setAttribute("aria-activedescendant", row.id);
+      }
+    }
+    this.activeRowEl = activeRow;
+
+    // Rebuild the detail + selection bars from the live item set so their counts/contents track the
+    // new selection. They live outside the list and hold no thumbnails, so this is flicker-free.
+    const rawItems = this.getCurrentRawItems();
+    this.detailBarEl?.remove();
+    this.detailBarEl = null;
+    this.contentEl.querySelectorAll(".gdab-drive-panel-selection-bar").forEach((element) => element.remove());
+    this.renderDetailBar(this.contentEl, rawItems);
+    this.renderSelectionBar(this.contentEl, rawItems);
+
+    if (scrollActive && activeRow) {
+      activeRow.scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  // Read and clear the "scroll the active row into view on the next paint" flag, so a selection-only
+  // refresh honors it exactly like render() does.
+  private consumeScrollActive(): boolean {
+    const scroll = this.scrollActiveIntoView;
+    this.scrollActiveIntoView = false;
+    return scroll;
   }
 
   private isDriveSearchActive(): boolean {
