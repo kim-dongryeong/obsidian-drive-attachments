@@ -229,7 +229,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
           await this.plugin.reloadCustomIconPack();
         }, 600, true);
         text
-          .setPlaceholder("Attachments/Icon pack")
+          .setPlaceholder(".obsidian/icon pack")
           .setValue(this.plugin.settings.customIconPackFolder)
           .onChange((value) => {
             this.plugin.settings.customIconPackFolder = value.trim();
