@@ -1084,9 +1084,9 @@ export class DrivePreviewService {
     let thumbnailLink: string | null = null;
     if (target.thumbnailLink) {
       try {
-        thumbnailLink = await this.withAccessToken(target.thumbnailLink);
+        thumbnailLink = await this.fetchThumbnailDataUrl(target.thumbnailLink);
       } catch (error) {
-        console.warn("[Drive Attachments] Drive thumbnail token failed; showing card only.", error);
+        console.warn("[Drive Attachments] Drive thumbnail load failed; showing card only.", error);
         thumbnailLink = null;
       }
     }
@@ -1127,11 +1127,17 @@ export class DrivePreviewService {
     this.attachDeletionBadge(el, target);
   }
 
-  private async withAccessToken(url: string): Promise<string> {
+  // Fetch a Drive thumbnail with the OAuth token in the Authorization header, then inline it as a
+  // data URL — the token never lands in the DOM/URL (unlike a `?access_token=` query param).
+  private async fetchThumbnailDataUrl(url: string): Promise<string> {
     const accessToken = await this.auth.getAccessToken();
-    const thumbnailUrl = new URL(url);
-    thumbnailUrl.searchParams.set("access_token", accessToken);
-    return thumbnailUrl.toString();
+    const response = await requestUrl({
+      url,
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const contentType = response.headers["content-type"] ?? "image/jpeg";
+    return `data:${contentType};base64,${arrayBufferToBase64(response.arrayBuffer)}`;
   }
 
   private renderCard(

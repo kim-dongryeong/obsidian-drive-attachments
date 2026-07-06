@@ -3084,9 +3084,10 @@ export class DrivePanelView extends ItemView {
       let thumbnailUrl: string | null = null;
       if (metadata.thumbnailLink) {
         try {
-          thumbnailUrl = await this.withAccessToken(metadata.thumbnailLink);
+          // Header-authenticated fetch → data URL (never puts the OAuth token in the DOM/URL).
+          thumbnailUrl = await this.thumbnails.getDataUrl(fileId, metadata.thumbnailLink);
         } catch (error) {
-          console.warn("[Drive Attachments] Drive panel thumbnail token failed.", error);
+          console.warn("[Drive Attachments] Drive panel thumbnail load failed.", error);
         }
       }
       this.detailMetadataCache.set(fileId, { metadata, thumbnailUrl });
@@ -3100,13 +3101,6 @@ export class DrivePanelView extends ItemView {
         this.refreshSelectionOnly(false);
       }
     }
-  }
-
-  private async withAccessToken(url: string): Promise<string> {
-    const accessToken = await this.auth.getAccessToken();
-    const thumbnailUrl = new URL(url);
-    thumbnailUrl.searchParams.set("access_token", accessToken);
-    return thumbnailUrl.toString();
   }
 
   private isOnlySelected(fileId: string): boolean {
