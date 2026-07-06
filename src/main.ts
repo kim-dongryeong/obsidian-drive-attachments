@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, Plugin, TFile } from "obsidian";
+import { debounce, EventRef, MarkdownView, Notice, Plugin, TFile } from "obsidian";
 import { DriveAuthService } from "./driveAuthService";
 import { CustomIconPackService } from "./customIconPack";
 import { askDriveDedupAction } from "./driveDedupModal";
@@ -68,6 +68,24 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
     this.mediaProxy = new DriveMediaProxyService(this.auth);
     this.customIconPack = new CustomIconPackService(this.app.vault.adapter, () => this.settings.customIconPackFolder);
     await this.customIconPack.reload();
+    // Apply pack edits (drop or delete an SVG in the folder) without an Obsidian restart. The `raw`
+    // event fires for config-dir files too — unlike create/modify/delete, which only cover the vault's
+    // markdown/attachment index — but it isn't in the public types, so reach it via a narrow cast. It
+    // can fire in bursts, so debounce and only reload when the changed path is inside the pack folder.
+    const rawVault = this.app.vault as unknown as {
+      on(name: "raw", callback: (path: string) => void): EventRef;
+    };
+    this.registerEvent(
+      rawVault.on(
+        "raw",
+        debounce((path: string) => {
+          const folder = this.customIconPack.folder;
+          if (folder && (path === folder || path.startsWith(`${folder}/`))) {
+            void this.reloadCustomIconPack();
+          }
+        }, 400, true),
+      ),
+    );
     this.applyCustomIconSize();
     this.insert = new InsertService(this.app, this.auth, this.picker, this.metadata, () => this.settings);
     this.preview = new DrivePreviewService(
@@ -652,6 +670,14 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
 
   async loadSettings(): Promise<void> {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    // Retired settings — their toggles were removed from the UI, so pin the behavior for every
+    // install (new and existing, whatever the saved value): in-Obsidian search is always on, the
+    // redundant server-only command stays hidden, a plain row click selects, folders open on
+    // double-click.
+    this.settings.enableDriveSearch = true;
+    this.settings.showServerOnlySearchCommand = false;
+    this.settings.panelRowClick = "select";
+    this.settings.panelOpenFolder = "double";
   }
 
   async saveSettings(): Promise<void> {

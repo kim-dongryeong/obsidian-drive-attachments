@@ -113,6 +113,10 @@ export const ASSET_NOTE_EXTRA_FRONTMATTER_EXAMPLE = 'categories:\n  - "[[Drive-l
 // Shared between the settings-tab placeholders and the InsertService folder resolution.
 export const DEFAULT_ASSET_NOTE_SUBFOLDER_NAME = "Drive links";
 export const DEFAULT_ASSET_NOTE_FOLDER_PATH = "Attachments/Drive links";
+// Same convention for the custom icon pack: empty field → this folder is actually used (icons found
+// there override the theme per-icon; missing ones fall back to it), matching Obsidian's own
+// "attachment folder path" behaviour where the greyed placeholder is the effective default.
+export const DEFAULT_CUSTOM_ICON_PACK_FOLDER = ".obsidian/icon pack";
 
 export interface GoogleDriveAttachmentBridgeSettings {
   clientId: string;
@@ -223,7 +227,7 @@ export const DEFAULT_SETTINGS: GoogleDriveAttachmentBridgeSettings = {
   grantedScopes: [],
   accountEmail: null,
   linkFormat: "asset-note",
-  assetNoteLocation: "vault-root",
+  assetNoteLocation: "specified-folder",
   assetNoteSubfolderName: "",
   assetNoteFolderPath: "",
   assetNoteNameTemplate: DEFAULT_ASSET_NOTE_NAME_TEMPLATE,
@@ -233,19 +237,19 @@ export const DEFAULT_SETTINGS: GoogleDriveAttachmentBridgeSettings = {
   addActionsBlockToNewNotes: true,
   showEmbedBacklinks: true,
   deleteLocalAfterMigrate: false,
-  enableDriveSearch: false,
-  enablePathSearch: false,
-  enableTypeIcons: false,
+  enableDriveSearch: true,
+  enablePathSearch: true,
+  enableTypeIcons: true,
   customIconPackFolder: "",
   customIconSize: 20,
   iconTheme: "default",
   showServerOnlySearchCommand: false,
   enableFullDriveAccess: false,
-  pastedImageDestination: "vault",
+  pastedImageDestination: "ask",
   panelDropUpload: "confirm",
   panelRowClick: "select",
   panelOpenFolder: "double",
-  panelDragOut: "link",
+  panelDragOut: "embed",
   panelDetailBar: true,
   panelSortKey: "name",
   panelSortDir: "asc",

@@ -5,22 +5,23 @@ import {
   DEFAULT_ASSET_NOTE_FOLDER_PATH,
   DEFAULT_ASSET_NOTE_NAME_TEMPLATE,
   DEFAULT_ASSET_NOTE_SUBFOLDER_NAME,
+  DEFAULT_CUSTOM_ICON_PACK_FOLDER,
   ICON_THEME_OPTIONS,
   isAssetNoteLocation,
   isEmbedActionToolbarStyle,
   isIconTheme,
   isPanelDragOutMode,
-  isPanelOpenFolderAction,
   isPanelDropUploadMode,
-  isPanelRowClickAction,
-  isPanelTheme,
   isPastedImageDestination,
+  isPanelTheme,
   PANEL_THEME_OPTIONS,
 } from "./settings";
 import GoogleDriveAttachmentBridgePlugin from "./main";
 
 export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
   private readonly uploadFolderPathCache = new Map<string, string>();
+  // Everything the basic list doesn't need is hidden behind the "Advanced options" expander.
+  private showAdvanced = false;
 
   constructor(app: App, private readonly plugin: GoogleDriveAttachmentBridgePlugin) {
     super(app, plugin);
@@ -29,6 +30,18 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
+
+    // Grey a whole setting out (visible opacity from the class, not setDisabled alone).
+    const greyOut = (setting: Setting, disabled: boolean): void => {
+      if (disabled) {
+        setting.setDisabled(true);
+        setting.settingEl.addClass("gdab-setting-disabled");
+      }
+    };
+
+    // ===================================================================================
+    // BASIC — always visible
+    // ===================================================================================
 
     new Setting(containerEl).setName("Google Drive connection").setHeading();
 
@@ -109,7 +122,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Full Drive access (delete picked/searched files)")
       .setDesc(
-        "Advanced. Off by default, the plugin can only delete files it uploaded itself. Turn this on " +
+        "Off by default, the plugin can only delete files it uploaded itself. Turn this on " +
           "to request the full Drive scope so you can also delete files you picked or searched from " +
           "your existing Drive. This grants read/write/delete over your ENTIRE Drive — only enable it " +
           "if you understand that. Takes effect after you reconnect, and you must also allow the scope " +
@@ -134,7 +147,33 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
           });
       });
 
-    new Setting(containerEl).setName("Google Picker (Spike 1)").setHeading();
+    // Legacy connections made before Connect requested the read scope need a one-time grant.
+    if (this.plugin.auth.isConnected && !this.plugin.auth.hasDriveReadonlyScope) {
+      new Setting(containerEl)
+        .setName("One more step: grant read access for search")
+        .setDesc(
+          "This legacy connection can upload and insert links, but it lacks the read permission now " +
+            "requested during Connect for search and real shared-drive names. Click “Grant access” and " +
+            "approve it. Nothing changes if you cancel.",
+        )
+        .addButton((button) => {
+          button
+            .setButtonText("Grant access")
+            .setCta()
+            .onClick(async () => {
+              try {
+                const email = await this.plugin.auth.connect();
+                this.plugin.refreshDrivePanelAvailability();
+                new Notice(`Drive read access granted — search is on (${email}).`);
+                this.redisplayPreservingScroll();
+              } catch (error) {
+                new Notice(`Couldn't grant access: ${error instanceof Error ? error.message : String(error)}`);
+              }
+            });
+        });
+    }
+
+    new Setting(containerEl).setName("Google Picker").setHeading();
 
     new Setting(containerEl)
       .setName("Picker API key")
@@ -163,63 +202,14 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
           });
       });
 
-    new Setting(containerEl).setName("In-Obsidian Drive search").setHeading();
-
-    new Setting(containerEl)
-      .setName("Enable in-Obsidian Drive search")
-      .setDesc("Show the in-Obsidian Drive search commands. Connect already requests the needed Drive read access.")
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.plugin.settings.enableDriveSearch)
-          .onChange(async (value) => {
-            this.plugin.settings.enableDriveSearch = value;
-            await this.plugin.saveSettings();
-            this.plugin.refreshDrivePanelAvailability();
-            this.redisplayPreservingScroll();
-          });
-      });
-
-    // Both depend on in-Obsidian search being on — grey them out otherwise. The visible grey comes
-    // from the .gdab-setting-disabled class (opacity), not setDisabled() alone — match greyOutWhenInline.
-    const searchOn = this.plugin.settings.enableDriveSearch;
-    const greyOut = (setting: Setting, disabled: boolean): void => {
-      if (disabled) {
-        setting.setDisabled(true);
-        setting.settingEl.addClass("gdab-setting-disabled");
-      }
-    };
-
-    const pathSearchSetting = new Setting(containerEl)
-      .setName("Enable path search")
-      .setDesc("Match instant-index search queries against resolved Drive folder paths as well as file names.")
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.plugin.settings.enablePathSearch)
-          .setDisabled(!searchOn)
-          .onChange(async (value) => {
-            this.plugin.settings.enablePathSearch = value;
-            await this.plugin.saveSettings();
-          });
-      });
-    greyOut(pathSearchSetting, !searchOn);
-
-    const typeIconsSetting = new Setting(containerEl)
-      .setName("Show type icons")
-      .setDesc("Prefix Drive search result type labels with a small best-effort icon for the file type.")
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.plugin.settings.enableTypeIcons)
-          .setDisabled(!searchOn)
-          .onChange(async (value) => {
-            this.plugin.settings.enableTypeIcons = value;
-            await this.plugin.saveSettings();
-          });
-      });
-    greyOut(typeIconsSetting, !searchOn);
+    new Setting(containerEl).setName("Icons & appearance").setHeading();
 
     new Setting(containerEl)
       .setName("Custom icon pack folder")
-      .setDesc("Vault-relative folder with SVG files and optional map.json. Empty uses the built-in file-type icons.")
+      .setDesc(
+        `Vault-relative folder with SVG files and optional map.json. Left empty it uses ${DEFAULT_CUSTOM_ICON_PACK_FOLDER} — ` +
+          "drop icons there and each overrides the selected theme for that file type; types you don't provide fall back to the theme.",
+      )
       .addText((text) => {
         // The folder value applies in-memory per keystroke (cheap), but persisting + reloading the
         // pack + force-refreshing previews is debounced: a force-refresh re-runs the (uncached)
@@ -229,7 +219,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
           await this.plugin.reloadCustomIconPack();
         }, 600, true);
         text
-          .setPlaceholder(".obsidian/icon pack")
+          .setPlaceholder(DEFAULT_CUSTOM_ICON_PACK_FOLDER)
           .setValue(this.plugin.settings.customIconPackFolder)
           .onChange((value) => {
             this.plugin.settings.customIconPackFolder = value.trim();
@@ -261,83 +251,6 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
       .addButton((button) =>
         button.setButtonText("Import from JSON").onClick(() => this.plugin.importIconPackFromJson()),
       );
-
-    new Setting(containerEl)
-      .setName("Index page limit")
-      .setDesc(
-        "How many pages (×1000 items, newest first) to index. If a known file isn't found — especially " +
-          "an older one — its page cap was reached; raise this to index more (slower to build). " +
-          "0 = unlimited (index the whole Drive; slowest on huge Drives, but always finishes). A small " +
-          "Drive finishes early regardless. After changing, run “Refresh Drive index”.",
-      )
-      .addText((text) => {
-        // 0 = unlimited; a real number clamps to [10, 2000]; anything else → the 150 default. Store the
-        // canonical value so the field matches what's actually used (the index also clamps, but the
-        // setting shouldn't display 20000 while really meaning 2000). Normalize the field on blur so
-        // typing isn't interrupted mid-keystroke.
-        const normalize = (raw: string): number => {
-          const parsed = Number.parseInt(raw, 10);
-          if (parsed === 0) {
-            return 0;
-          }
-          return Number.isFinite(parsed) ? Math.max(10, Math.min(2000, parsed)) : 150;
-        };
-        text
-          .setPlaceholder("150 (0 = unlimited)")
-          .setValue(String(this.plugin.settings.indexPageLimit))
-          .onChange(async (value) => {
-            this.plugin.settings.indexPageLimit = normalize(value);
-            await this.plugin.saveSettings();
-          });
-        text.inputEl.addEventListener("blur", () => {
-          text.setValue(String(this.plugin.settings.indexPageLimit));
-        });
-      });
-
-    new Setting(containerEl)
-      .setName("Show server-only search command")
-      .setDesc(
-        "Advanced: keep the separate “Search Google Drive (server, exact)” command in the command " +
-          "palette. The unified search already runs the same server query live, so this is only " +
-          "useful for comparing the two.",
-      )
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.plugin.settings.showServerOnlySearchCommand)
-          .onChange(async (value) => {
-            this.plugin.settings.showServerOnlySearchCommand = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    // Show the one-click grant only for legacy connections made before Connect requested the full
-    // one-shot scope set. Fresh connections should not need a second consent screen.
-    if (this.plugin.auth.isConnected && !this.plugin.auth.hasDriveReadonlyScope) {
-      new Setting(containerEl)
-        .setName("One more step: grant read access for search")
-        .setDesc(
-          "This legacy connection can upload and insert links, but it lacks the read permission now " +
-            "requested during Connect for search and real shared-drive names. Click “Grant access” and " +
-            "approve it. Nothing changes if you cancel.",
-        )
-        .addButton((button) => {
-          button
-            .setButtonText("Grant access")
-            .setCta()
-            .onClick(async () => {
-              try {
-                const email = await this.plugin.auth.connect();
-                this.plugin.refreshDrivePanelAvailability();
-                new Notice(`Drive read access granted — search is on (${email}).`);
-                this.redisplayPreservingScroll();
-              } catch (error) {
-                new Notice(`Couldn't grant access: ${error instanceof Error ? error.message : String(error)}`);
-              }
-            });
-        });
-    }
-
-    new Setting(containerEl).setName("Drive panel").setHeading();
 
     new Setting(containerEl)
       .setName("File icon theme")
@@ -374,6 +287,8 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
           });
       });
 
+    new Setting(containerEl).setName("Drive panel").setHeading();
+
     new Setting(containerEl)
       .setName("Local file drops")
       .setDesc(
@@ -392,35 +307,6 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("Single-click action")
-      .setDesc("What a plain click on a Drive panel row does. Modifier-click and Shift-click always adjust selection.")
-      .addDropdown((dropdown) => {
-        dropdown
-          .addOption("select", "Select row (default)")
-          .addOption("preview", "Preview file")
-          .addOption("open", "Open file in Drive")
-          .setValue(this.plugin.settings.panelRowClick)
-          .onChange(async (value) => {
-            this.plugin.settings.panelRowClick = isPanelRowClickAction(value) ? value : "select";
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Open folders with")
-      .setDesc("Choose whether folders in the Drive panel open with one click or double-click. Double-click keeps single-click free for selection.")
-      .addDropdown((dropdown) => {
-        dropdown
-          .addOption("double", "Double-click to open (default)")
-          .addOption("single", "Single-click to open")
-          .setValue(this.plugin.settings.panelOpenFolder)
-          .onChange(async (value) => {
-            this.plugin.settings.panelOpenFolder = isPanelOpenFolderAction(value) ? value : "double";
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(containerEl)
       .setName("Drag-out format")
       .setDesc(
         "What dragging a Drive panel row (or selection) out onto a note inserts at the drop point. " +
@@ -431,45 +317,13 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
       )
       .addDropdown((dropdown) => {
         dropdown
-          .addOption("link", "Inline link (default)")
-          .addOption("embed", "Embed preview")
+          .addOption("link", "Inline link")
+          .addOption("embed", "Embed preview (default)")
           .addOption("note", "Drive-link note")
           .addOption("off", "Off")
           .setValue(this.plugin.settings.panelDragOut)
           .onChange(async (value) => {
-            this.plugin.settings.panelDragOut = isPanelDragOutMode(value) ? value : "link";
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Details bar")
-      .setDesc(
-        "Show a read-only details bar at the bottom of the Drive panel describing the selected " +
-          "item — its type, size, modified date, and location (an aggregate when several are selected).",
-      )
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.plugin.settings.panelDetailBar)
-          .onChange(async (value) => {
-            this.plugin.settings.panelDetailBar = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Type icon colors")
-      .setDesc(
-        "Color-code Drive panel row icons by file type (folders, images, videos, audio, PDFs, Docs, " +
-          "Sheets…), matching the search results and drive.google.com. Turn off for a uniform muted " +
-          "icon color. A folder’s own Drive color and branded/thumbnail icons always take precedence. " +
-          "Takes effect the next time the panel re-renders.",
-      )
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.plugin.settings.panelTypeIconAccents)
-          .onChange(async (value) => {
-            this.plugin.settings.panelTypeIconAccents = value;
+            this.plugin.settings.panelDragOut = isPanelDragOutMode(value) ? value : "embed";
             await this.plugin.saveSettings();
           });
       });
@@ -485,12 +339,12 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
       )
       .addDropdown((dropdown) => {
         dropdown
-          .addOption("vault", "Save to vault (default)")
-          .addOption("ask", "Ask each time")
+          .addOption("vault", "Save to vault")
+          .addOption("ask", "Ask each time (default)")
           .addOption("drive", "Upload to Drive")
           .setValue(this.plugin.settings.pastedImageDestination)
           .onChange(async (value) => {
-            this.plugin.settings.pastedImageDestination = isPastedImageDestination(value) ? value : "vault";
+            this.plugin.settings.pastedImageDestination = isPastedImageDestination(value) ? value : "ask";
             await this.plugin.saveSettings();
           });
       });
@@ -567,7 +421,13 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Inserted link format")
-      .setDesc("Choose the Markdown shape inserted after selecting a Drive file or folder.")
+      .setDesc(
+        "What the “Insert Drive link” commands (Picker and search) drop into your note when you pick a " +
+          "file or folder. “Inline Markdown link” inserts just a [text](url) link at the cursor. " +
+          "“Drive-link note wikilink” instead creates a dedicated note for the file — holding its " +
+          "metadata, and optionally a preview and action buttons — and inserts a [[wikilink]] to it. " +
+          "All the Drive-link note settings below apply only to the wikilink option.",
+      )
       .addDropdown((dropdown) => {
         dropdown
           .addOption("inline", "Inline Markdown link")
@@ -584,6 +444,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
     // The note-location rows only apply to asset-note wikilinks. With inline links selected they
     // render greyed-out instead of hidden (kdr prefers disabled over hidden) so they stay
     // discoverable. Components must be added before setDisabled — it only reaches existing ones.
+    // Defined here (before both the basic note rows and the advanced note-block rows) so both reuse it.
     const assetNotesActive = this.plugin.settings.linkFormat === "asset-note";
     const assetNoteOnlyHint = assetNotesActive ? "" : " Only applies to Drive-link note wikilinks.";
     const greyOutWhenInline = (setting: Setting): void => {
@@ -686,6 +547,124 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
           text.inputEl.addClass("gdab-extra-frontmatter-textarea");
         }),
     );
+
+    // ===================================================================================
+    // ADVANCED — behind the expander
+    // ===================================================================================
+
+    new Setting(containerEl)
+      .setName("Advanced options")
+      .setDesc(
+        this.showAdvanced
+          ? ""
+          : "Search tuning, extra panel toggles, Drive-link note blocks, embed hover actions, and vault slimming.",
+      )
+      .addButton((button) => {
+        button
+          .setButtonText(this.showAdvanced ? "Hide" : "Show")
+          .onClick(() => {
+            this.showAdvanced = !this.showAdvanced;
+            this.redisplayPreservingScroll();
+          });
+      });
+
+    if (!this.showAdvanced) {
+      return;
+    }
+
+    new Setting(containerEl).setName("Search options").setHeading();
+
+    new Setting(containerEl)
+      .setName("Enable path search")
+      .setDesc("Match instant-index search queries against resolved Drive folder paths as well as file names.")
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.enablePathSearch)
+          .onChange(async (value) => {
+            this.plugin.settings.enablePathSearch = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName("Show type icons")
+      .setDesc("Prefix Drive search result type labels with a small best-effort icon for the file type.")
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.enableTypeIcons)
+          .onChange(async (value) => {
+            this.plugin.settings.enableTypeIcons = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName("Index page limit")
+      .setDesc(
+        "How many pages (×1000 items, newest first) to index. If a known file isn't found — especially " +
+          "an older one — its page cap was reached; raise this to index more (slower to build). " +
+          "0 = unlimited (index the whole Drive; slowest on huge Drives, but always finishes). A small " +
+          "Drive finishes early regardless. After changing, run “Refresh Drive index”.",
+      )
+      .addText((text) => {
+        // 0 = unlimited; a real number clamps to [10, 2000]; anything else → the 150 default. Store the
+        // canonical value so the field matches what's actually used (the index also clamps, but the
+        // setting shouldn't display 20000 while really meaning 2000). Normalize the field on blur so
+        // typing isn't interrupted mid-keystroke.
+        const normalize = (raw: string): number => {
+          const parsed = Number.parseInt(raw, 10);
+          if (parsed === 0) {
+            return 0;
+          }
+          return Number.isFinite(parsed) ? Math.max(10, Math.min(2000, parsed)) : 150;
+        };
+        text
+          .setPlaceholder("150 (0 = unlimited)")
+          .setValue(String(this.plugin.settings.indexPageLimit))
+          .onChange(async (value) => {
+            this.plugin.settings.indexPageLimit = normalize(value);
+            await this.plugin.saveSettings();
+          });
+        text.inputEl.addEventListener("blur", () => {
+          text.setValue(String(this.plugin.settings.indexPageLimit));
+        });
+      });
+
+    new Setting(containerEl).setName("Panel extras").setHeading();
+
+    new Setting(containerEl)
+      .setName("Details bar")
+      .setDesc(
+        "Show a read-only details bar at the bottom of the Drive panel describing the selected " +
+          "item — its type, size, modified date, and location (an aggregate when several are selected).",
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.panelDetailBar)
+          .onChange(async (value) => {
+            this.plugin.settings.panelDetailBar = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName("Type icon colors")
+      .setDesc(
+        "Color-code Drive panel row icons by file type (folders, images, videos, audio, PDFs, Docs, " +
+          "Sheets…), matching the search results and drive.google.com. Turn off for a uniform muted " +
+          "icon color. A folder’s own Drive color and branded/thumbnail icons always take precedence. " +
+          "Takes effect the next time the panel re-renders.",
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.panelTypeIconAccents)
+          .onChange(async (value) => {
+            this.plugin.settings.panelTypeIconAccents = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl).setName("Drive-link note blocks").setHeading();
 
     greyOutWhenInline(
       new Setting(containerEl)

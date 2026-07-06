@@ -126,7 +126,7 @@ export function renderFileIcon(
   const customSrc = customIconSrc?.(mimeType, name);
   if (customSrc) {
     el.empty();
-    el.createEl("img", {
+    const img = el.createEl("img", {
       cls: "gdab-custom-file-icon-img",
       attr: {
         src: customSrc,
@@ -136,9 +136,27 @@ export function renderFileIcon(
         loading: "lazy",
       },
     });
+    // A pack icon that was deleted (or is unreadable) would otherwise render as a broken-image glyph.
+    // Fall back to the built-in icon on load failure — covers the gap before the folder watcher
+    // refreshes the (now stale) in-memory pack.
+    img.addEventListener("error", () => {
+      el.empty();
+      renderBuiltinFileIcon(el, mimeType, name, lucideFallback, iconTheme);
+    });
     return;
   }
 
+  renderBuiltinFileIcon(el, mimeType, name, lucideFallback, iconTheme);
+}
+
+// The non-custom-pack icon path: selected bundled theme → today's branded/Lucide default.
+function renderBuiltinFileIcon(
+  el: HTMLElement,
+  mimeType: string,
+  name: string,
+  lucideFallback: string,
+  iconTheme: IconTheme,
+): void {
   const themed = bundledIconForFile(iconTheme, mimeType, name);
   if (themed) {
     el.innerHTML = themed; // trusted generated SVG constants, never user pack contents

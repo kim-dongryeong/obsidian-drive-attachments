@@ -147,6 +147,10 @@
   height: var(--gdab-custom-icon-size, 20px);
   object-fit: contain;
   vertical-align: middle;
+  /* Neutralize any theme/snippet global `img { box-shadow; border-radius }` — a file-type icon is a
+     glyph, not a photo, so the drop-shadow + rounded frame read as an unwanted square behind it. */
+  box-shadow: none;
+  border-radius: 0;
 }
 
 .gdab-drive-search-result-hint.gdab-type-sheet {
@@ -2784,8 +2788,8 @@
 }
 
 .gdab-drive-panel-row-icon svg {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
 }
 
 /* P5: per-type icon accents in the Drive panel (mirrors the search-result palette + drive.google.com).

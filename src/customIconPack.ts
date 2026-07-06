@@ -1,5 +1,6 @@
 import { DataAdapter, normalizePath } from "obsidian";
 import { fileIconName } from "./fileIconName";
+import { DEFAULT_CUSTOM_ICON_PACK_FOLDER } from "./settings";
 import { ONEDRIVE_EXT_TO_ICON } from "./oneDriveIcons";
 
 interface ParsedIconMap {
@@ -28,6 +29,12 @@ export class CustomIconPackService {
     private readonly adapter: DataAdapter,
     private readonly getFolderPath: () => string,
   ) {}
+
+  // The effective (default-resolved) pack folder currently loaded, or "" before the first reload.
+  // Used by the folder watcher to tell whether a changed path belongs to the pack.
+  get folder(): string {
+    return this.folderPath;
+  }
 
   async reload(): Promise<void> {
     const folderPath = normalizePackFolderPath(this.getFolderPath());
@@ -183,10 +190,9 @@ export class CustomIconPackService {
 }
 
 function normalizePackFolderPath(path: string): string {
-  const trimmed = path.trim();
-  if (!trimmed) {
-    return "";
-  }
+  // Empty field → use the default folder (Obsidian placeholder-is-default convention). Icons present
+  // there override the selected theme per-icon; anything missing falls back to the theme.
+  const trimmed = path.trim() || DEFAULT_CUSTOM_ICON_PACK_FOLDER;
   return normalizePath(trimmed.replace(/^\/+/, "").replace(/\/+$/, ""));
 }
 
