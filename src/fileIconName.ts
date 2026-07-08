@@ -1,8 +1,8 @@
-import { ONEDRIVE_EXT_TO_ICON } from "./oneDriveIcons";
+import { FILE_EXTENSION_ICON_NAMES } from "./fileIconMap";
 
-// Resolve the shared icon-pack name for a Drive item. Extensions follow the established OneDrive
-// map; mime is the fallback for extensionless Drive-native files. Bundled themes and user packs both
-// consume this classification so their coverage cannot drift apart.
+// Resolve the shared icon-pack name for a Drive item. Extension mapping is the first pass; mime is
+// the fallback for extensionless Drive-native files. Bundled themes and user packs both consume this
+// classification so their coverage cannot drift apart.
 export function fileIconName(mimeType: string, name: string): string | null {
   const mime = mimeType.toLowerCase();
   if (mime === "application/vnd.google-apps.folder") {
@@ -11,7 +11,7 @@ export function fileIconName(mimeType: string, name: string): string | null {
 
   const dot = name.lastIndexOf(".");
   const ext = dot >= 0 ? name.slice(dot + 1).trim().toLowerCase() : "";
-  const mapped = ONEDRIVE_EXT_TO_ICON[ext];
+  const mapped = FILE_EXTENSION_ICON_NAMES[ext];
   if (mapped) return mapped;
 
   if (!mime) return null;

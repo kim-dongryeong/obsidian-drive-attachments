@@ -193,10 +193,9 @@ folder cannot be picked even though Computers files appear in search and dedup.
   and re-inserting/normalizing an old block upgrades it. Languages centralized in
   `src/codeBlockLang.ts`.
 
-- **Replace Google's filetype icons.** The non-preview card uses Google Drive's own filetype badge
-  SVG (currently just the PDF one, `GOOGLE_PDF_ICON` in `drivePreviewService.ts`) — Google's product
-  icons are Google's IP. Before publishing, swap them for original badge artwork (or fall back to
-  Lucide + brand tint). Fine for kdr's personal use until then.
+- ✅ **Replace third-party filetype icons — DONE (0.71.1, 2026-07-08).** Default file icons now fall
+  back to Obsidian/Lucide, and the old Google/Microsoft inline SVG assets were removed. The optional
+  bundled themes use plugin-generated artwork.
 
 ## Operating notes for the loop
 

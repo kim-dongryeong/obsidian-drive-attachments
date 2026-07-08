@@ -158,7 +158,7 @@ export interface GoogleDriveAttachmentBridgeSettings {
   customIconPackFolder: string;
   customIconSize: number;
   // Bundled file-type artwork used in search, panel, and preview cards. A configured user icon
-  // folder still wins for any icon it provides; "default" preserves the branded/Lucide baseline.
+  // folder still wins for any icon it provides; "default" uses Obsidian's Lucide icons.
   iconTheme: IconTheme;
   showServerOnlySearchCommand: boolean;
   // Advanced: request the full `drive` OAuth scope on connect so deletion (and edits) reach files the
@@ -194,9 +194,8 @@ export interface GoogleDriveAttachmentBridgeSettings {
   // "default" preserves the existing Obsidian-native appearance.
   panelTheme: PanelTheme;
   // P5 polish: color-code panel row icons by file type (folders gold, images teal, video red, audio
-  // amber, PDF/Docs/Sheets brand colors…), mirroring the search results + drive.google.com. Off falls
-  // back to a uniform muted icon. Branded full-color/thumbnail icons and a folder's own Drive color
-  // always win either way.
+  // amber, PDF/Docs/Sheets accents...), mirroring the search results + drive.google.com. Off falls
+  // back to a uniform muted icon. Thumbnail/custom icons and a folder's own Drive color always win.
   panelTypeIconAccents: boolean;
   // Ways an embedded Drive image offers a path into its Drive-link (metadata) note — each toggled
   // independently, so they can be combined or all turned off. Photo stays clean either way.

@@ -652,7 +652,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
       .setDesc(
         "Color-code Drive panel row icons by file type (folders, images, videos, audio, PDFs, Docs, " +
           "Sheets…), matching the search results and drive.google.com. Turn off for a uniform muted " +
-          "icon color. A folder’s own Drive color and branded/thumbnail icons always take precedence. " +
+          "icon color. A folder’s own Drive color, custom icons, and thumbnails always take precedence. " +
           "Takes effect the next time the panel re-renders.",
       )
       .addToggle((toggle) => {

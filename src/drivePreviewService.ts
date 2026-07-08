@@ -2,7 +2,7 @@ import { App, arrayBufferToBase64, MarkdownPostProcessorContext, MarkdownView, M
 import { DriveAuthService } from "./driveAuthService";
 import { DriveMediaProxyService } from "./driveMediaProxyService";
 import { DriveMetadata, DriveMetadataService } from "./driveMetadataService";
-import { brandedFileIcon, type CustomFileIconResolver } from "./driveFileIcon";
+import type { CustomFileIconResolver } from "./driveFileIcon";
 import { bundledIconForFile } from "./iconThemes";
 import { DriveNoteActionsService } from "./driveNoteActionsService";
 import { DrivePickerItem } from "./driveTypes";
@@ -1160,7 +1160,7 @@ export class DrivePreviewService {
           },
         });
       } else if (options.icon.svg) {
-        // Trusted constant SVG (our own / Google's filetype badge), not user input — safe to inline.
+        // Trusted constant SVG from the selected bundled icon theme, not user input.
         iconEl.innerHTML = options.icon.svg;
       } else if (options.icon.lucide) {
         setIcon(iconEl, options.icon.lucide);
@@ -1198,16 +1198,15 @@ function metadataToTarget(metadata: DriveMetadata): PreviewTarget {
 }
 
 interface CardIcon {
-  // Either a custom pack image, an inline SVG (bundled/trusted badges), or a Lucide icon name; plus a color.
+  // Either a custom pack image, an inline SVG from a bundled theme, or a Lucide icon name; plus a color.
   imgSrc?: string;
   svg?: string;
   lucide?: string;
   color: string;
 }
 
-// A colored file-type icon for the non-preview card, by mimeType/extension. Branded types (PDF,
-// PowerPoint) use the real Google/Microsoft SVG (see driveFileIcon.ts); the rest use Lucide shapes
-// tinted to each brand/category color.
+// A colored file-type icon for the non-preview card, by mimeType/extension. The default branch uses
+// Lucide shapes; custom packs and selected bundled themes can still provide SVG artwork.
 function cardTypeIcon(
   mimeType: string,
   name: string,
@@ -1224,10 +1223,6 @@ function cardTypeIcon(
     return { svg: themed, color: "" };
   }
 
-  const branded = brandedFileIcon(mimeType, name);
-  if (branded) {
-    return { svg: branded.svg, color: branded.color ?? "" };
-  }
   const mime = mimeType.toLowerCase();
   const ext = (name.includes(".") ? name.split(".").pop() ?? "" : "").toLowerCase();
   const has = (...keys: string[]): boolean => keys.some((key) => mime.includes(key));

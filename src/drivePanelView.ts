@@ -1715,9 +1715,9 @@ export class DrivePanelView extends ItemView {
     }
 
     const icon = row.createSpan({ cls: "gdab-drive-panel-row-icon", attr: { "aria-hidden": "true" } });
-    // P5: color-code the row icon by file type (folder/image/video/audio/doc…) like the search
-    // results + drive.google.com when enabled. A folder's own Drive color (set inline below) and
-    // branded full-color/thumbnail icons still win — the type class only tints currentColor icons.
+    // P5: color-code the row icon by file type (folder/image/video/audio/doc...) like the search
+    // results + drive.google.com when enabled. A folder's own Drive color (set inline below),
+    // custom icons, and thumbnails still win; the type class only tints currentColor icons.
     if (this.getSettings().panelTypeIconAccents) {
       icon.addClass("is-type-accented", getDriveResultTypeClass(item));
     }

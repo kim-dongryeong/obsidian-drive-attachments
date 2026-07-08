@@ -1,7 +1,7 @@
 import { DataAdapter, normalizePath } from "obsidian";
+import { FILE_EXTENSION_ICON_NAMES } from "./fileIconMap";
 import { fileIconName } from "./fileIconName";
 import { DEFAULT_CUSTOM_ICON_PACK_FOLDER } from "./settings";
-import { ONEDRIVE_EXT_TO_ICON } from "./oneDriveIcons";
 
 interface ParsedIconMap {
   map: Record<string, string>;
@@ -22,7 +22,7 @@ export interface CustomIconPackImportResult {
 
 export class CustomIconPackService {
   private iconFiles = new Map<string, string>();
-  private extToIcon: Record<string, string> = { ...ONEDRIVE_EXT_TO_ICON };
+  private extToIcon: Record<string, string> = { ...FILE_EXTENSION_ICON_NAMES };
   private folderPath = "";
 
   constructor(
@@ -40,7 +40,7 @@ export class CustomIconPackService {
     const folderPath = normalizePackFolderPath(this.getFolderPath());
     this.folderPath = folderPath;
     this.iconFiles = new Map();
-    this.extToIcon = { ...ONEDRIVE_EXT_TO_ICON };
+    this.extToIcon = { ...FILE_EXTENSION_ICON_NAMES };
 
     if (!folderPath) {
       return;
@@ -63,10 +63,10 @@ export class CustomIconPackService {
       const mapPath = listed.files.find((filePath) => basename(filePath).toLowerCase() === "map.json");
       const userMap = mapPath ? await this.readMapJson(mapPath) : {};
       this.iconFiles = iconFiles;
-      this.extToIcon = { ...ONEDRIVE_EXT_TO_ICON, ...userMap };
+      this.extToIcon = { ...FILE_EXTENSION_ICON_NAMES, ...userMap };
     } catch {
       this.iconFiles = new Map();
-      this.extToIcon = { ...ONEDRIVE_EXT_TO_ICON };
+      this.extToIcon = { ...FILE_EXTENSION_ICON_NAMES };
     }
   }
 

@@ -15,3 +15,11 @@ export function debounce<T extends (...args: never[]) => unknown>(fn: T): T {
 export function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return Buffer.from(buffer).toString("base64");
 }
+
+export function setIcon(el: { setAttribute?: (name: string, value: string) => void; icon?: string }, icon: string): void {
+  if (typeof el.setAttribute === "function") {
+    el.setAttribute("data-icon", icon);
+    return;
+  }
+  el.icon = icon;
+}

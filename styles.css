@@ -2053,7 +2053,7 @@
 
 /* Neutralize the optional Lucide type palette for this black-and-white skin. The extra panel/list/
    row specificity beats the later light and dark generic type rules without !important; custom
-   folder colors and branded full-color artwork remain intentional item metadata. */
+   folder colors, custom icons, and thumbnails remain intentional item metadata. */
 .gdab-theme-editorial .gdab-drive-panel-list .gdab-drive-panel-row .gdab-drive-panel-row-icon.is-type-accented {
   color: var(--gdab-text-muted);
 }
@@ -2793,9 +2793,8 @@
 }
 
 /* P5: per-type icon accents in the Drive panel (mirrors the search-result palette + drive.google.com).
-   Toggled by `panelTypeIconAccents`. Only tints currentColor (Lucide) icons; branded single-fill SVGs
-   set an inline color, full-color Word/Excel/PPT bake their fills, a folder's own Drive color is set
-   inline, and a loaded thumbnail covers the icon — all of those override or hide these. */
+   Toggled by `panelTypeIconAccents`. Only tints currentColor (Lucide) icons. Bundled/custom SVGs,
+   a folder's own Drive color, and loaded thumbnails override or hide these accents. */
 .gdab-drive-panel-row-icon.is-type-accented.gdab-type-folder {
   color: var(--gdab-type-folder, #f9ab00);
 }
