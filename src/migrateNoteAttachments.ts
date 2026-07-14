@@ -11,7 +11,7 @@ import {
 import { formatBytes } from "./byteFormat";
 import { computeMd5Hex, DriveDedupHit, DriveDedupService } from "./driveDedupService";
 import { DrivePickerItem } from "./driveTypes";
-import { DriveUploadService } from "./driveUploadService";
+import { BufferUploadSource, DriveUploadService } from "./driveUploadService";
 import { InsertService } from "./insertService";
 import { GoogleDriveAttachmentBridgeSettings } from "./settings";
 
@@ -382,11 +382,13 @@ export class MigrateNoteAttachmentsPreviewModal extends Modal {
       item = plan.dedupHit.item;
       source = "reused";
     } else {
+      // vault.readBinary only hands out whole buffers, so migration keeps the buffer-backed source
+      // (no streaming win here — vault attachments were small enough to live in the vault).
       const data = await this.app.vault.readBinary(plan.candidate.file);
       const uploaded = await this.upload.uploadFile({
         name: plan.candidate.file.name,
         mimeType: getLocalAttachmentMimeType(plan.candidate.file),
-        data,
+        source: new BufferUploadSource(data),
         parentFolderId: this.settings.defaultUploadFolderId || undefined,
       });
       item = uploaded.item;

@@ -11,7 +11,7 @@ import {
   WorkspaceLeaf,
 } from "obsidian";
 import { formatBytes } from "./byteFormat";
-import { computeMd5Hex, DriveDedupHit, DriveDedupService } from "./driveDedupService";
+import { computeMd5HexFromSource, DriveDedupHit, DriveDedupService } from "./driveDedupService";
 import { DriveAuthService } from "./driveAuthService";
 import { DriveIndexItem, DriveIndexService } from "./driveIndexService";
 import {
@@ -52,7 +52,7 @@ import {
   PanelTheme,
   PanelViewMode,
 } from "./settings";
-import { DriveUploadService } from "./driveUploadService";
+import { DriveUploadService, FileUploadSource } from "./driveUploadService";
 import { DriveFileOpsService } from "./driveFileOpsService";
 import { DriveThumbnailService } from "./driveThumbnailService";
 
@@ -729,8 +729,8 @@ export class DrivePanelView extends ItemView {
         progress.setMessage(formatPanelUploadProgress(index + 1, files.length, target.name, stats, file.name));
 
         try {
-          const data = await file.arrayBuffer();
-          const md5 = computeMd5Hex(data);
+          const source = new FileUploadSource(file);
+          const md5 = await computeMd5HexFromSource(source);
           const duplicate = await this.findPanelDropDuplicate(md5, file.name);
 
           if (duplicate) {
@@ -742,7 +742,7 @@ export class DrivePanelView extends ItemView {
           await this.upload.uploadFile({
             name: file.name,
             mimeType: file.type || "application/octet-stream",
-            data,
+            source,
             parentFolderId: target.id,
             allowRootFallback: false,
           });
@@ -844,11 +844,10 @@ export class DrivePanelView extends ItemView {
 
         try {
           const parentId = await ensureFolder(dir);
-          const data = await file.arrayBuffer();
           await this.upload.uploadFile({
             name: file.name,
             mimeType: file.type || "application/octet-stream",
-            data,
+            source: new FileUploadSource(file),
             parentFolderId: parentId,
             allowRootFallback: false,
           });

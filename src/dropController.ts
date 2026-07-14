@@ -1,8 +1,8 @@
 import { App, ButtonComponent, Editor, EditorPosition, MarkdownFileInfo, MarkdownView, Modal, Notice } from "obsidian";
 import { askDriveDedupAction } from "./driveDedupModal";
-import { computeMd5Hex, DriveDedupHit, DriveDedupService } from "./driveDedupService";
+import { computeMd5HexFromSource, DriveDedupHit, DriveDedupService } from "./driveDedupService";
 import { DriveMetadataService } from "./driveMetadataService";
-import { DriveUploadService } from "./driveUploadService";
+import { DriveUploadService, FileUploadSource } from "./driveUploadService";
 import {
   DRIVE_PANEL_DRAG_MIME,
   DrivePickerItem,
@@ -269,8 +269,10 @@ export class DropController {
       const file = files[index];
       const placeholder = placeholders[index];
       try {
-        const data = await file.arrayBuffer();
-        const md5 = computeMd5Hex(data);
+        // Chunk-readable source: the dedup hash and the upload both stream 5-8 MiB windows, so a
+        // large drop never loads the whole file into memory.
+        const source = new FileUploadSource(file);
+        const md5 = await computeMd5HexFromSource(source);
         const duplicate = await this.findUploadDuplicate(md5, file.name);
 
         if (duplicate) {
@@ -289,13 +291,13 @@ export class DropController {
             }
             continue;
           }
-          // "upload-anyway" falls through to the unchanged upload path, reusing the same buffer.
+          // "upload-anyway" falls through to the unchanged upload path, reusing the same source.
         }
 
         const result = await this.upload.uploadFile({
           name: file.name,
           mimeType: file.type || "application/octet-stream",
-          data,
+          source,
           parentFolderId,
         });
         const markdown = await this.formatUploadedItem(result.item, sourceFile, embedImages);

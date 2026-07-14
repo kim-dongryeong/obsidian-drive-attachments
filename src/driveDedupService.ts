@@ -3,6 +3,7 @@ import { App, requestUrl, TFile, type RequestUrlResponse } from "obsidian";
 import { DriveAuthService } from "./driveAuthService";
 import { DriveIndexService } from "./driveIndexService";
 import { assertValidDrivePickerItem, DrivePickerItem } from "./driveTypes";
+import type { UploadSource } from "./driveUploadService";
 
 const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
 const DRIVE_DEDUP_FIELDS = "nextPageToken,files(id,name,mimeType,webViewLink,md5Checksum,size,parents)";
@@ -37,6 +38,20 @@ export interface DriveDedupLookupInput {
 
 export function computeMd5Hex(data: ArrayBuffer): string {
   return createHash("md5").update(Buffer.from(data)).digest("hex");
+}
+
+// Incremental md5 over an UploadSource, 8 MiB at a time — dedup hashing of a large dropped file no
+// longer needs the whole file resident (pairs with the chunked upload path; the result matches
+// Drive's md5Checksum, which is the whole-content hash regardless of how it was uploaded).
+const MD5_SOURCE_CHUNK_BYTES = 8 * 1024 * 1024;
+
+export async function computeMd5HexFromSource(source: UploadSource): Promise<string> {
+  const hash = createHash("md5");
+  for (let offset = 0; offset < source.size; offset += MD5_SOURCE_CHUNK_BYTES) {
+    const end = Math.min(offset + MD5_SOURCE_CHUNK_BYTES, source.size);
+    hash.update(Buffer.from(await source.readChunk(offset, end)));
+  }
+  return hash.digest("hex");
 }
 
 export class DriveDedupService {

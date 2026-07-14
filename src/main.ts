@@ -2,7 +2,7 @@ import { debounce, EventRef, MarkdownView, Notice, Plugin, TFile } from "obsidia
 import { DriveAuthService } from "./driveAuthService";
 import { CustomIconPackService } from "./customIconPack";
 import { askDriveDedupAction } from "./driveDedupModal";
-import { computeMd5Hex, DriveDedupHit, DriveDedupService } from "./driveDedupService";
+import { computeMd5HexFromSource, DriveDedupHit, DriveDedupService } from "./driveDedupService";
 import { DriveIndexService } from "./driveIndexService";
 import { DriveMediaProxyService } from "./driveMediaProxyService";
 import { DriveMetadataService } from "./driveMetadataService";
@@ -14,7 +14,7 @@ import { DriveSearchModal } from "./driveSearchModal";
 import { DriveSearchService } from "./driveSearchService";
 import { DriveServerSearchModal } from "./driveServerSearchModal";
 import { DriveTrashService } from "./driveTrashService";
-import { DriveUploadResult, DriveUploadService } from "./driveUploadService";
+import { DriveUploadResult, DriveUploadService, FileUploadSource } from "./driveUploadService";
 import { upsertActionsSection } from "./actionsSection";
 import { DriveNoteActionsService } from "./driveNoteActionsService";
 import { DropController, makeUploadPlaceholder, replacePlaceholder } from "./dropController";
@@ -355,9 +355,10 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
             return;
           }
 
-          // M5.5 (D10): the buffer is read once and shared by the dedup hash and the upload.
-          const data = await file.arrayBuffer();
-          const md5 = computeMd5Hex(data);
+          // M5.5 (D10): one chunk-readable source shared by the dedup hash and the upload — a large
+          // file streams in 5-8 MiB windows instead of ever being fully resident.
+          const source = new FileUploadSource(file);
+          const md5 = await computeMd5HexFromSource(source);
           const duplicate = await this.findUploadDuplicate(md5, file.name);
 
           if (duplicate) {
@@ -385,7 +386,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
             result = await this.upload.uploadFile({
               name: file.name,
               mimeType: file.type || "application/octet-stream",
-              data,
+              source,
               parentFolderId: this.settings.defaultUploadFolderId || undefined,
             });
           } catch (error) {
