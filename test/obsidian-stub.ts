@@ -23,3 +23,12 @@ export function setIcon(el: { setAttribute?: (name: string, value: string) => vo
   }
   el.icon = icon;
 }
+
+export class Notice {
+  constructor(_message?: string, _timeout?: number) {}
+}
+
+// Tests never hit the network; anything that does reach requestUrl in a unit test is a test bug.
+export function requestUrl(): never {
+  throw new Error("requestUrl is not available in unit tests — mock at the service boundary instead.");
+}

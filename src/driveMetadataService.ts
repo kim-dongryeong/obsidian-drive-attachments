@@ -5,7 +5,7 @@ const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
 const DRIVE_DRIVES_URL = "https://www.googleapis.com/drive/v3/drives";
 const DRIVE_ABOUT_URL = "https://www.googleapis.com/drive/v3/about";
 const DRIVE_BROWSER_FIELDS =
-  "files(id,name,mimeType,iconLink,thumbnailLink,folderColorRgb,starred,shared,ownedByMe,modifiedTime,modifiedByMeTime,viewedByMeTime,size,webViewLink,owners(displayName,emailAddress))";
+  "nextPageToken,files(id,name,mimeType,iconLink,thumbnailLink,folderColorRgb,starred,shared,ownedByMe,modifiedTime,modifiedByMeTime,viewedByMeTime,size,webViewLink,owners(displayName,emailAddress))";
 const DRIVE_METADATA_FIELDS = [
   "id",
   "name",
@@ -85,6 +85,15 @@ export interface SharedDriveRoot {
   name: string;
 }
 
+// One page of a Drive listing. `nextPageToken` present means Drive has more items — pass it back to
+// the same list call to fetch the next page. Absent = the listing is complete. (Drive may return
+// fewer than pageSize items per page even mid-listing, so only the token — never the item count —
+// signals completion.)
+export interface DriveBrowserPage {
+  items: DriveBrowserItem[];
+  nextPageToken?: string;
+}
+
 export class DriveMetadataService {
   // Cache folder name/parents by id for the service's lifetime. Path resolution across many search
   // results (and asset notes) repeatedly walks the same ancestor folders, so memoizing collapses
@@ -130,15 +139,26 @@ export class DriveMetadataService {
     return drives.sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
   }
 
-  async listFolder(folderId: string): Promise<DriveBrowserItem[]> {
+  // Shared core for the browser listings (folder / Starred / Shared with me / Recent / Trash): one
+  // files.list page per call. Callers pass the previous page's nextPageToken to continue; a missing
+  // token in the result means the listing is complete.
+  private async listBrowserPage(
+    q: string,
+    orderBy: string,
+    errorLabel: string,
+    pageToken?: string,
+  ): Promise<DriveBrowserPage> {
     const accessToken = await this.auth.getAccessToken();
     const url = new URL(DRIVE_FILES_URL);
-    url.searchParams.set("q", `'${escapeDriveQueryString(folderId)}' in parents and trashed = false`);
+    url.searchParams.set("q", q);
     url.searchParams.set("fields", DRIVE_BROWSER_FIELDS);
-    url.searchParams.set("orderBy", "folder,name");
+    url.searchParams.set("orderBy", orderBy);
     url.searchParams.set("pageSize", "200");
     url.searchParams.set("supportsAllDrives", "true");
     url.searchParams.set("includeItemsFromAllDrives", "true");
+    if (pageToken) {
+      url.searchParams.set("pageToken", pageToken);
+    }
 
     const response = await requestUrl({
       url: url.toString(),
@@ -147,107 +167,50 @@ export class DriveMetadataService {
     });
 
     if (response.status < 200 || response.status >= 300) {
-      throw new Error(`Google Drive folder listing failed with HTTP ${response.status}.`);
+      throw new Error(`Google Drive ${errorLabel} failed with HTTP ${response.status}.`);
     }
 
-    return parseDriveBrowserItems(response);
+    return parseDriveBrowserPage(response);
   }
 
-  async listStarred(): Promise<DriveBrowserItem[]> {
-    const accessToken = await this.auth.getAccessToken();
-    const url = new URL(DRIVE_FILES_URL);
-    url.searchParams.set("q", "starred = true and trashed = false");
-    url.searchParams.set("fields", DRIVE_BROWSER_FIELDS);
-    url.searchParams.set("orderBy", "folder,name");
-    url.searchParams.set("pageSize", "200");
-    url.searchParams.set("supportsAllDrives", "true");
-    url.searchParams.set("includeItemsFromAllDrives", "true");
-
-    const response = await requestUrl({
-      url: url.toString(),
-      headers: { Authorization: `Bearer ${accessToken}` },
-      throw: false,
-    });
-
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(`Google Drive Starred listing failed with HTTP ${response.status}.`);
-    }
-
-    return parseDriveBrowserItems(response);
+  async listFolderPage(folderId: string, pageToken?: string): Promise<DriveBrowserPage> {
+    return this.listBrowserPage(
+      `'${escapeDriveQueryString(folderId)}' in parents and trashed = false`,
+      "folder,name",
+      "folder listing",
+      pageToken,
+    );
   }
 
-  async listSharedWithMe(): Promise<DriveBrowserItem[]> {
-    const accessToken = await this.auth.getAccessToken();
-    const url = new URL(DRIVE_FILES_URL);
-    url.searchParams.set("q", "sharedWithMe = true and trashed = false");
-    url.searchParams.set("fields", DRIVE_BROWSER_FIELDS);
-    url.searchParams.set("orderBy", "folder,name");
-    url.searchParams.set("pageSize", "200");
-    url.searchParams.set("supportsAllDrives", "true");
-    url.searchParams.set("includeItemsFromAllDrives", "true");
-
-    const response = await requestUrl({
-      url: url.toString(),
-      headers: { Authorization: `Bearer ${accessToken}` },
-      throw: false,
-    });
-
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(`Google Drive Shared with me listing failed with HTTP ${response.status}.`);
-    }
-
-    return parseDriveBrowserItems(response);
+  async listStarredPage(pageToken?: string): Promise<DriveBrowserPage> {
+    return this.listBrowserPage("starred = true and trashed = false", "folder,name", "Starred listing", pageToken);
   }
 
-  async listRecent(): Promise<DriveBrowserItem[]> {
-    const accessToken = await this.auth.getAccessToken();
-    const url = new URL(DRIVE_FILES_URL);
-    // Drive's "Recent" view: non-trashed files (folders excluded, as on drive.google.com),
-    // most-recently opened first, falling back to last-modified for never-opened items.
-    url.searchParams.set("q", "trashed = false and mimeType != 'application/vnd.google-apps.folder'");
-    url.searchParams.set("fields", DRIVE_BROWSER_FIELDS);
-    url.searchParams.set("orderBy", "viewedByMeTime desc,modifiedTime desc");
-    url.searchParams.set("pageSize", "200");
-    url.searchParams.set("supportsAllDrives", "true");
-    url.searchParams.set("includeItemsFromAllDrives", "true");
-
-    const response = await requestUrl({
-      url: url.toString(),
-      headers: { Authorization: `Bearer ${accessToken}` },
-      throw: false,
-    });
-
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(`Google Drive Recent listing failed with HTTP ${response.status}.`);
-    }
-
-    return parseDriveBrowserItems(response);
+  async listSharedWithMePage(pageToken?: string): Promise<DriveBrowserPage> {
+    return this.listBrowserPage(
+      "sharedWithMe = true and trashed = false",
+      "folder,name",
+      "Shared with me listing",
+      pageToken,
+    );
   }
 
-  async listTrashed(): Promise<DriveBrowserItem[]> {
-    const accessToken = await this.auth.getAccessToken();
-    const url = new URL(DRIVE_FILES_URL);
-    // Drive's "Trash" view: every trashed item, files and folders alike (as on drive.google.com).
-    // `trashedTime` is not a valid Drive `orderBy` key, so we sort folders-first by name and let the
-    // panel's persisted client-side sort take over for display.
-    url.searchParams.set("q", "trashed = true");
-    url.searchParams.set("fields", DRIVE_BROWSER_FIELDS);
-    url.searchParams.set("orderBy", "folder,name");
-    url.searchParams.set("pageSize", "200");
-    url.searchParams.set("supportsAllDrives", "true");
-    url.searchParams.set("includeItemsFromAllDrives", "true");
+  // Drive's "Recent" view: non-trashed files (folders excluded, as on drive.google.com),
+  // most-recently opened first, falling back to last-modified for never-opened items.
+  async listRecentPage(pageToken?: string): Promise<DriveBrowserPage> {
+    return this.listBrowserPage(
+      "trashed = false and mimeType != 'application/vnd.google-apps.folder'",
+      "viewedByMeTime desc,modifiedTime desc",
+      "Recent listing",
+      pageToken,
+    );
+  }
 
-    const response = await requestUrl({
-      url: url.toString(),
-      headers: { Authorization: `Bearer ${accessToken}` },
-      throw: false,
-    });
-
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(`Google Drive Trash listing failed with HTTP ${response.status}.`);
-    }
-
-    return parseDriveBrowserItems(response);
+  // Drive's "Trash" view: every trashed item, files and folders alike (as on drive.google.com).
+  // `trashedTime` is not a valid Drive `orderBy` key, so we sort folders-first by name and let the
+  // panel's persisted client-side sort take over for display.
+  async listTrashedPage(pageToken?: string): Promise<DriveBrowserPage> {
+    return this.listBrowserPage("trashed = true", "folder,name", "Trash listing", pageToken);
   }
 
   async getFolderColorPalette(): Promise<string[]> {
@@ -468,9 +431,10 @@ function parseDriveMetadata(response: RequestUrlResponse): DriveMetadata {
   return parsed;
 }
 
-function parseDriveBrowserItems(response: RequestUrlResponse): DriveBrowserItem[] {
+// Exported for unit tests (pure: RequestUrlResponse text → page).
+export function parseDriveBrowserPage(response: RequestUrlResponse): DriveBrowserPage {
   if (!response.text) {
-    return [];
+    return { items: [] };
   }
 
   let parsed: unknown;
@@ -480,12 +444,12 @@ function parseDriveBrowserItems(response: RequestUrlResponse): DriveBrowserItem[
     throw new Error("Google Drive returned an unreadable folder listing.");
   }
 
-  const files = (parsed as { files?: unknown } | null)?.files;
-  if (!Array.isArray(files)) {
-    return [];
-  }
-
-  return files.filter(isDriveBrowserItem);
+  const body = parsed as { files?: unknown; nextPageToken?: unknown } | null;
+  const files = body?.files;
+  const items = Array.isArray(files) ? files.filter(isDriveBrowserItem) : [];
+  const nextPageToken =
+    typeof body?.nextPageToken === "string" && body.nextPageToken.length > 0 ? body.nextPageToken : undefined;
+  return { items, nextPageToken };
 }
 
 function parseSharedDriveRoots(response: RequestUrlResponse): { drives: SharedDriveRoot[]; nextPageToken?: string } {

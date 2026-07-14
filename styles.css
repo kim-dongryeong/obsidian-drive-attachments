@@ -3107,6 +3107,38 @@
   margin-bottom: 10px;
 }
 
+/* "Load more" row under the item list when Drive reports another page (200+ item folders). */
+.gdab-drive-panel-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 10px;
+}
+
+/* In grid view the list is a CSS grid — keep the row full-width instead of one card cell. */
+.gdab-drive-panel-list.is-view-grid .gdab-drive-panel-load-more {
+  grid-column: 1 / -1;
+}
+
+.gdab-drive-panel-load-more-button {
+  font-size: var(--font-ui-smaller);
+  color: var(--gdab-text-muted, var(--text-muted));
+  background: transparent;
+  border: 1px solid var(--gdab-divider, var(--background-modifier-border));
+  border-radius: 14px;
+  padding: 3px 14px;
+  cursor: pointer;
+}
+
+.gdab-drive-panel-load-more-button:hover:not(:disabled) {
+  color: var(--gdab-text, var(--text-normal));
+  background: var(--gdab-control-hover, var(--background-modifier-hover));
+}
+
+.gdab-drive-panel-load-more-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /*
  * Loading skeleton (see DrivePanelView.renderLoadingSkeleton). Shimmering placeholders that mirror the
  * active view mode's row shape so real rows replace them with minimal layout shift. Decorative only —

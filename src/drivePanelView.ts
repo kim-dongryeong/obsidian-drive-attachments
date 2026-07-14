@@ -16,6 +16,7 @@ import { DriveAuthService } from "./driveAuthService";
 import { DriveIndexItem, DriveIndexService } from "./driveIndexService";
 import {
   DriveBrowserItem,
+  DriveBrowserPage,
   DriveMetadata,
   DriveMetadataService,
   DriveOwner,
@@ -147,6 +148,10 @@ const DRIVE_INTERNAL_DRAG_MIME = "application/x-gdab-drive-items";
 export class DrivePanelView extends ItemView {
   private readonly path: DrivePanelLocation[] = [{ ...MY_DRIVE_ROOT }];
   private readonly folderCache = new Map<string, DriveBrowserItem[]>();
+  // Drive nextPageToken per location id — present only while that listing has more pages to fetch
+  // ("Load more" row shows). Lives beside folderCache and is cleared/invalidated with it.
+  private readonly folderNextPageToken = new Map<string, string>();
+  private loadingMoreFolderId: string | null = null;
   private sharedDriveRoots: SharedDriveRoot[] = [];
   private rootsLoaded = false;
   private rootsLoading = false;
@@ -275,6 +280,7 @@ export class DrivePanelView extends ItemView {
     this.cancelDriveSearch();
     this.panelIndexPromise = null;
     this.folderCache.clear();
+    this.folderNextPageToken.clear();
     this.clearSelection(false);
     this.resetTypeAheadBuffer();
     this.setPanelDropHighlight(false);
@@ -927,11 +933,12 @@ export class DrivePanelView extends ItemView {
     this.render();
 
     try {
-      const items = await this.listLocationItems(folderId);
+      const page = await this.listLocationItemsPage(folderId);
       if (generation !== this.loadGeneration) {
         return;
       }
-      this.folderCache.set(folderId, sortFolderFirst(items));
+      this.folderCache.set(folderId, sortFolderFirst(page.items));
+      this.setNextPageToken(folderId, page.nextPageToken);
       this.pruneSelection(this.folderCache.get(folderId) ?? []);
       this.errorMessage = null;
     } catch (error) {
@@ -943,6 +950,57 @@ export class DrivePanelView extends ItemView {
       if (generation === this.loadGeneration) {
         this.loadingFolderId = null;
         this.render();
+      }
+    }
+  }
+
+  private setNextPageToken(folderId: string, token: string | undefined): void {
+    if (token) {
+      this.folderNextPageToken.set(folderId, token);
+    } else {
+      this.folderNextPageToken.delete(folderId);
+    }
+  }
+
+  // "Load more" — fetch the current listing's next Drive page and append it. Guarded by the same
+  // loadGeneration as loadCurrentFolder, so navigating away (or refreshing) while a page is in
+  // flight discards the stale append instead of splicing it into another folder's list.
+  private async loadMoreCurrentFolder(): Promise<void> {
+    const folderId = this.currentLocation.id;
+    const pageToken = this.folderNextPageToken.get(folderId);
+    if (!pageToken || this.loadingMoreFolderId !== null) {
+      return;
+    }
+
+    const generation = this.loadGeneration;
+    this.loadingMoreFolderId = folderId;
+    this.render();
+
+    try {
+      const page = await this.listLocationItemsPage(folderId, pageToken);
+      if (generation !== this.loadGeneration) {
+        return;
+      }
+      const existing = this.folderCache.get(folderId) ?? [];
+      // Dedup by id: the listing can shift between page fetches (uploads, renames), and Drive may
+      // then re-serve an item the first page already had. Last-write wins keeps the fresher copy.
+      const merged = new Map(existing.map((item) => [item.id, item] as const));
+      for (const item of page.items) {
+        merged.set(item.id, item);
+      }
+      this.folderCache.set(folderId, sortFolderFirst([...merged.values()]));
+      this.setNextPageToken(folderId, page.nextPageToken);
+    } catch (error) {
+      if (generation !== this.loadGeneration) {
+        return;
+      }
+      new Notice(`Load more failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      if (generation === this.loadGeneration) {
+        this.loadingMoreFolderId = null;
+        this.render();
+      } else {
+        this.loadingMoreFolderId = null;
       }
     }
   }
@@ -1369,8 +1427,10 @@ export class DrivePanelView extends ItemView {
       return cached;
     }
 
-    const items = sortFolderFirst(await this.listLocationItems(folderId));
+    const page = await this.listLocationItemsPage(folderId);
+    const items = sortFolderFirst(page.items);
     this.folderCache.set(folderId, items);
+    this.setNextPageToken(folderId, page.nextPageToken);
     return items;
   }
 
@@ -1389,6 +1449,7 @@ export class DrivePanelView extends ItemView {
     this.pushHistory();
     if (index === 0 && previousRootId !== location.id) {
       this.folderCache.clear();
+      this.folderNextPageToken.clear();
     }
     this.clearSelection(false);
     void this.loadCurrentFolder(false);
@@ -1529,6 +1590,7 @@ export class DrivePanelView extends ItemView {
       this.pushHistory();
       if (previousRootId !== resolved[0].id) {
         this.folderCache.clear();
+        this.folderNextPageToken.clear();
       }
       this.clearSelection(false);
       this.addressBarEditing = false;
@@ -1636,10 +1698,31 @@ export class DrivePanelView extends ItemView {
 
     const rawItems = this.folderCache.get(folderId) ?? [];
     this.populateRows(list, rawItems, true);
+    this.renderLoadMoreRow(list, folderId);
     if (rawItems.length > 0) {
       this.renderDetailBar(contentEl, rawItems);
       this.renderSelectionBar(contentEl, rawItems);
     }
+  }
+
+  // Drive serves listings 200 items per page; when a nextPageToken is pending for this location,
+  // append a "Load more" row under the item rows so the tail of large folders stays reachable
+  // (without it, item 201+ would silently not exist as far as the panel shows).
+  private renderLoadMoreRow(list: HTMLElement, folderId: string): void {
+    if (!this.folderNextPageToken.has(folderId)) {
+      return;
+    }
+    const isLoading = this.loadingMoreFolderId === folderId;
+    const row = list.createDiv({ cls: "gdab-drive-panel-load-more" });
+    const button = row.createEl("button", {
+      cls: "gdab-drive-panel-load-more-button",
+      text: isLoading ? "Loading more..." : "Load more",
+    });
+    button.disabled = isLoading;
+    button.addEventListener("click", (evt) => {
+      evt.stopPropagation();
+      void this.loadMoreCurrentFolder();
+    });
   }
 
   // Drive-style loading placeholder: shimmering skeleton rows that mirror the active view mode's row
@@ -4415,21 +4498,22 @@ export class DrivePanelView extends ItemView {
   }
 
   // Route a virtual collection root to its query-backed service call; a real
-  // Drive folder id falls through to the normal parent listing.
-  private listLocationItems(folderId: string): Promise<DriveBrowserItem[]> {
+  // Drive folder id falls through to the normal parent listing. One page per call —
+  // pass the previous page's nextPageToken to continue the same listing.
+  private listLocationItemsPage(folderId: string, pageToken?: string): Promise<DriveBrowserPage> {
     if (folderId === SHARED_WITH_ME_ROOT.id) {
-      return this.metadata.listSharedWithMe();
+      return this.metadata.listSharedWithMePage(pageToken);
     }
     if (folderId === RECENT_ROOT.id) {
-      return this.metadata.listRecent();
+      return this.metadata.listRecentPage(pageToken);
     }
     if (folderId === STARRED_ROOT.id) {
-      return this.metadata.listStarred();
+      return this.metadata.listStarredPage(pageToken);
     }
     if (folderId === TRASH_ROOT.id) {
-      return this.metadata.listTrashed();
+      return this.metadata.listTrashedPage(pageToken);
     }
-    return this.metadata.listFolder(folderId);
+    return this.metadata.listFolderPage(folderId, pageToken);
   }
 
   private isCurrentVirtualRoot(): boolean {
@@ -4958,11 +5042,23 @@ class PanelFolderPickerModal extends Modal {
     this.render();
 
     try {
-      const items = await this.options.metadata.listFolder(this.currentLocation.id);
-      if (generation !== this.generation) {
-        return;
+      // The picker must offer every subfolder as a target, so walk ALL listing pages (200/page) —
+      // stopping at a folder count 201+ would silently hide valid move/pick destinations. Capped at
+      // 10 pages (2,000 items) as a runaway guard; folders sort first, so they arrive earliest.
+      const folders: DriveBrowserItem[] = [];
+      let pageToken: string | undefined;
+      for (let pageIndex = 0; pageIndex < 10; pageIndex += 1) {
+        const page: DriveBrowserPage = await this.options.metadata.listFolderPage(this.currentLocation.id, pageToken);
+        if (generation !== this.generation) {
+          return;
+        }
+        folders.push(...page.items.filter((item) => item.mimeType === DRIVE_FOLDER_MIME_TYPE));
+        pageToken = page.nextPageToken;
+        if (!pageToken) {
+          break;
+        }
       }
-      this.folders = items.filter((item) => item.mimeType === DRIVE_FOLDER_MIME_TYPE);
+      this.folders = folders;
     } catch (error) {
       if (generation !== this.generation) {
         return;
