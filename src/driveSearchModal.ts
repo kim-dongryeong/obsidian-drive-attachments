@@ -44,6 +44,9 @@ export class DriveSearchModal extends FuzzySuggestModal<DriveIndexItem> {
   private serverGeneration = 0;
   private serverFallbackTimer: number | null = null;
   private serverFallbackInFlight = false;
+  // The term the pending debounce timer / in-flight request is for — same-term re-renders (index
+  // streaming refresh) keep it instead of resetting the debounce. See maybeQueueServerFallback.
+  private pendingServerTerm: string | null = null;
   private indexCapped = false;
   private indexProgressText: string | null = null;
   // Extra hits merged from the server fallback, kept for the modal's lifetime. `getItems()` unions
@@ -198,14 +201,25 @@ export class DriveSearchModal extends FuzzySuggestModal<DriveIndexItem> {
   }
 
   private maybeQueueServerFallback(query: string): void {
-    // Any new query / re-render supersedes a pending server search (incl. clearing the box).
+    const trimmed = query.trim();
+    // A re-render with the SAME term must keep the pending debounce timer / in-flight request —
+    // the index's 300ms streaming refresh re-enters here, and resetting the 400ms debounce each
+    // time would mean the fallback never fires during a long cold crawl. Only a changed term
+    // supersedes the pending one.
+    if (
+      trimmed === this.pendingServerTerm &&
+      (this.serverFallbackTimer !== null || this.serverFallbackInFlight)
+    ) {
+      return;
+    }
+
+    // Any new query supersedes a pending server search (incl. clearing the box).
     this.cancelServerFallback();
 
     if (!this.getSettings().enableDriveSearch || !this.auth.hasDriveSearchScope) {
       return;
     }
 
-    const trimmed = query.trim();
     if (trimmed.length < SERVER_FALLBACK_MIN_QUERY_LENGTH) {
       return;
     }
@@ -216,12 +230,13 @@ export class DriveSearchModal extends FuzzySuggestModal<DriveIndexItem> {
       return;
     }
 
-    // Let the index finish streaming first; its 300ms refresh re-enters getSuggestions, so the
-    // fallback re-evaluates against the complete index once loading settles.
-    if (this.index.getState().isLoading) {
-      return;
-    }
+    // Deliberately DO run while the index is still streaming (cold index): the server search is the
+    // only source of complete results until the crawl settles, so waiting made the modal look empty
+    // or stale right after startup. The index's 300ms refresh re-enters getSuggestions and resets the
+    // debounce below, and serverQueriedTerms keeps one term to one server query, so streaming
+    // refreshes can't stack duplicate requests.
 
+    this.pendingServerTerm = trimmed;
     const generation = ++this.serverGeneration;
     this.serverFallbackTimer = window.setTimeout(() => {
       this.serverFallbackTimer = null;
@@ -273,6 +288,7 @@ export class DriveSearchModal extends FuzzySuggestModal<DriveIndexItem> {
   }
 
   private cancelServerFallback(): void {
+    this.pendingServerTerm = null;
     this.serverGeneration += 1;
     if (this.serverFallbackTimer !== null) {
       window.clearTimeout(this.serverFallbackTimer);
@@ -314,11 +330,19 @@ export class DriveSearchModal extends FuzzySuggestModal<DriveIndexItem> {
     });
   }
 
-  // Show the Drive folder path under each hit's type. Resolution is async (walks the hit's parents)
-  // and best-effort: a resolved path renders below the hint, a null/failed lookup renders nothing so
-  // it never clutters or implies a fake location. The `.then` may run after a re-render detached this
-  // row — `setText`/`remove` on an orphaned element is harmless.
+  // Show the Drive folder path under each hit's type. Index hits carry a precomputed `path`
+  // (computeItemPaths) — render it synchronously with zero network. Only pathless hits (server
+  // fallback, rows streamed mid-crawl) fall to the async parent walk, which is best-effort: a
+  // resolved path renders below the hint, a null/failed lookup renders nothing so it never clutters
+  // or implies a fake location. The `.then` may run after a re-render detached this row —
+  // `setText`/`remove` on an orphaned element is harmless.
   private renderResultPath(value: DriveIndexItem, container: HTMLElement): void {
+    if (value.path) {
+      const pathEl = container.createDiv({ cls: "gdab-drive-search-result-path" });
+      this.renderPathContent(pathEl, value.path);
+      return;
+    }
+
     if (this.resolvedPaths.has(value.id)) {
       const cached = this.resolvedPaths.get(value.id) ?? null;
       if (cached) {
