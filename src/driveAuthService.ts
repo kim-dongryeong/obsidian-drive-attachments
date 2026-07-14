@@ -43,6 +43,11 @@ export class DriveAuthService {
     private readonly saveSettings: () => Promise<void>,
   ) {}
 
+  // The short-lived access token lives ONLY in memory (never written to data.json). The refresh
+  // token is the durable credential; a fresh access token is minted per session/expiry. Keeps the
+  // plaintext-secrets surface of data.json down to clientSecret + (legacy plain) refresh token.
+  private cachedAccessToken: { token: string; expiresAt: number } | null = null;
+
   get isConnected(): boolean {
     const settings = this.getSettings();
     return settings.encryptedRefreshToken !== null || settings.refreshToken !== null;
@@ -84,7 +89,8 @@ export class DriveAuthService {
     const tokens = await this.exchangeCode(code, settings.clientId, settings.clientSecret, redirectUri, codeVerifier);
     const email = await this.getAccountEmail(tokens.accessToken);
 
-    settings.accessToken = tokens.accessToken;
+    this.cachedAccessToken = { token: tokens.accessToken, expiresAt: tokens.expiresAt };
+    settings.accessToken = null; // memory-only; also scrubs a token persisted by older versions
     this.storeRefreshToken(settings, tokens.refreshToken);
     settings.tokenExpiry = tokens.expiresAt;
     settings.grantedScopes = getGrantedScopes(tokens.grantedScopes, settings.grantedScopes, requestedScopes);
@@ -95,6 +101,7 @@ export class DriveAuthService {
   }
 
   async disconnect(): Promise<void> {
+    this.cachedAccessToken = null;
     const settings = this.getSettings();
     settings.accessToken = null;
     settings.refreshToken = null;
@@ -109,7 +116,7 @@ export class DriveAuthService {
   async getAccessToken(): Promise<string> {
     const settings = this.getSettings();
     const refreshToken = this.readRefreshToken(settings);
-    if (!settings.accessToken || !refreshToken) {
+    if (!refreshToken) {
       throw new Error("Not authenticated. Please connect to Google Drive.");
     }
 
@@ -118,8 +125,20 @@ export class DriveAuthService {
       await this.saveSettings();
     }
 
-    if (settings.tokenExpiry && Date.now() < settings.tokenExpiry - TOKEN_REFRESH_SKEW_MS) {
-      return settings.accessToken;
+    if (this.cachedAccessToken && Date.now() < this.cachedAccessToken.expiresAt - TOKEN_REFRESH_SKEW_MS) {
+      return this.cachedAccessToken.token;
+    }
+
+    // Migration: older versions persisted the access token in data.json. Use a still-valid one to
+    // seed the memory cache, and scrub it from disk on the next save either way.
+    if (settings.accessToken) {
+      const legacyToken = settings.accessToken;
+      settings.accessToken = null;
+      if (settings.tokenExpiry && Date.now() < settings.tokenExpiry - TOKEN_REFRESH_SKEW_MS) {
+        this.cachedAccessToken = { token: legacyToken, expiresAt: settings.tokenExpiry };
+        await this.saveSettings();
+        return legacyToken;
+      }
     }
 
     if (!settings.clientId || !settings.clientSecret) {
@@ -131,7 +150,7 @@ export class DriveAuthService {
       settings.clientId,
       settings.clientSecret,
     );
-    settings.accessToken = refreshed.accessToken;
+    this.cachedAccessToken = { token: refreshed.accessToken, expiresAt: refreshed.expiresAt };
     settings.tokenExpiry = refreshed.expiresAt;
     await this.saveSettings();
 

@@ -121,6 +121,8 @@ export const DEFAULT_CUSTOM_ICON_PACK_FOLDER = ".obsidian/icon pack";
 export interface GoogleDriveAttachmentBridgeSettings {
   clientId: string;
   clientSecret: string;
+  // Always null on save since the access token became memory-only (DriveAuthService.cachedAccessToken);
+  // the field remains so a token persisted by an older version can seed the cache once, then be scrubbed.
   accessToken: string | null;
   refreshToken: string | null;
   encryptedRefreshToken: string | null;
