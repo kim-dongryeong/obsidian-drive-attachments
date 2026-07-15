@@ -960,7 +960,9 @@ export class DrivePanelView extends ItemView {
   }
 
   private setNextPageToken(folderId: string, token: string | undefined): void {
-    if (token) {
+    // Recent is a bounded "recently touched" view (the 200 most-recent), not a full-Drive browse —
+    // never offer Load more there, or it would page the entire Drive by recency and never end.
+    if (token && folderId !== RECENT_ROOT.id) {
       this.folderNextPageToken.set(folderId, token);
     } else {
       this.folderNextPageToken.delete(folderId);
