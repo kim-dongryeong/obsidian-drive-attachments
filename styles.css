@@ -135,6 +135,20 @@
   flex: 0 0 auto;
 }
 
+/* Type icon shown next to the file name (not the type label): fixed 16px so bundled-theme SVGs and
+   custom-pack <img> icons line up identically, nudged to sit on the name's text line. */
+.gdab-drive-search-result-name-icon {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}
+
+.gdab-drive-search-result-name-icon svg,
+.gdab-drive-search-result-name-icon .gdab-custom-file-icon-img {
+  width: 16px;
+  height: 16px;
+}
+
 .gdab-drive-search-result-icon svg {
   width: 1em;
   height: 1em;

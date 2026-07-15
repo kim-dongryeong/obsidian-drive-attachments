@@ -302,12 +302,24 @@ export class DriveSearchModal extends FuzzySuggestModal<DriveIndexItem> {
 
   renderSuggestion(value: FuzzyMatch<DriveIndexItem>, el: HTMLElement): void {
     const item = value.item;
+    const settings = this.getSettings();
     const container = el.createDiv({ cls: "gdab-drive-search-result" });
+
+    // The type icon belongs next to the FILE NAME (drive.google.com / Finder style), not tucked
+    // beside the "Google Sheet" / "Image" type label — it's a fixed 16px so it aligns cleanly.
+    if (settings.enableTypeIcons) {
+      const iconEl = container.createSpan({
+        cls: "gdab-drive-search-result-icon gdab-drive-search-result-name-icon",
+        attr: { "aria-hidden": "true" },
+      });
+      renderFileIcon(iconEl, item.mimeType, item.name, getDriveResultIcon(item), this.customIconSrc, settings.iconTheme);
+    }
+
     const main = container.createDiv({ cls: "gdab-drive-search-result-main" });
     const nameEl = main.createDiv({ cls: "gdab-drive-search-result-name" });
     renderSearchHighlights(item.name, this.inputEl.value, nameEl);
-    const settings = this.getSettings();
-    renderDriveResultHint(item, main, settings.enableTypeIcons, this.customIconSrc, settings.iconTheme);
+    // The hint keeps just the type label now that the icon moved up to the name.
+    renderDriveResultHint(item, main, false);
     this.renderResultPath(item, main);
     this.renderActionButton(item, container);
   }
