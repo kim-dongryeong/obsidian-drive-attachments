@@ -2744,6 +2744,12 @@
   border-radius: var(--gdab-row-radius, 6px);
 }
 
+/* List / compact rows: tighten the icon↔name gap toward Finder / File Explorer density
+   (grid view keeps its own card spacing). */
+.gdab-drive-panel-list:not(.is-view-grid) .gdab-drive-panel-row {
+  gap: 5px;
+}
+
 .gdab-drive-panel-row.is-folder {
   cursor: pointer;
 }
@@ -3042,6 +3048,10 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  /* The details are informational text (name, path, size) — let the user drag-select and copy them. */
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
 
 .gdab-drive-panel-detail-name {
@@ -3062,9 +3072,8 @@
 }
 
 .gdab-drive-panel-detail-location {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Wrap (not truncate) so a long Drive path is fully visible and copyable. */
+  overflow-wrap: anywhere;
   color: var(--gdab-text-faint, var(--text-faint));
   font-size: var(--font-ui-smaller);
 }
