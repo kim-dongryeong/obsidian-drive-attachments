@@ -10,6 +10,11 @@ also search your Drive and insert links to existing files and folders.
 
 **Desktop only.**
 
+<!-- TODO(demo): drop a short drop→upload→link screencast here, e.g.  ![demo](docs/demo.gif) -->
+
+**In one line:** drop a big file into a note → it uploads to *your* Google Drive → a durable link (or
+asset note) takes its place, so your vault stays small and syncable.
+
 ## Features
 
 - **Upload on drop** — drag a file into the editor and it goes to Google Drive, not the
@@ -105,6 +110,31 @@ Only enable this if you are comfortable granting the plugin read/write/delete ov
 **entire** Drive — that breadth is the price Google charges for touching files the plugin did not
 create. Deletions still default to Drive's **trash** (recoverable for ~30 days); a permanent,
 unrecoverable delete always requires a second explicit confirmation.
+
+## Privacy
+
+- **Your files stay private.** Uploads go to *your* Google Drive with its default private
+  permissions — the plugin never makes a file public or shares it with anyone.
+- **No middle-man server.** The plugin talks **directly** to Google's APIs using *your own* OAuth
+  client. There is no third-party backend, proxy, or account — nothing is sent anywhere but Google.
+- **No telemetry.** No analytics, no phone-home, no usage tracking. Feedback is opt-in — open a
+  GitHub issue if something's wrong.
+- **Tokens stay local.** See the storage note under [Setup](#setup): the client secret sits in
+  plaintext `data.json`, the refresh token is `safeStorage`-encrypted when available, and the
+  short-lived access token lives in memory only (never written to disk).
+
+## Troubleshooting
+
+| Symptom | Cause & fix |
+|---|---|
+| **"Google hasn't verified this app"** on connect | Expected while your OAuth app is in *Testing* / unverified — you are its developer. Click **Advanced → Go to \<app name\> (unsafe)** and continue. |
+| Connection **stops working after ~7 days** | Testing-status apps expire sensitive-scope grants weekly. **Disconnect → Connect** to renew, or publish the app (**Google Auth Platform → Audience → Publish app → In production**) to stop the weekly expiry for good. |
+| **`invalid_grant`** / "Not authenticated. Please connect to Google Drive." | The refresh token was revoked or expired (7-day testing limit, a password change, or you removed the app under your Google account's *Third-party access*). **Disconnect → Connect** to re-authorize. |
+| Consent screen shows the **wrong Google account** | You're signed into several Google accounts. Choose the one that owns the Cloud project **and** the Drive on the consent screen, or sign the others out first. |
+| **"This API … is disabled"** or search returns nothing | The **Google Drive API** and/or **Google Picker API** aren't enabled on your Cloud project. Enable both under **Cloud Console → APIs & Services → Library**. |
+| Search finds nothing right after connecting | Grant the read scope: the first connect on an older setup may lack it — the settings tab shows a **"Grant read access for search"** button, or just **Disconnect → Connect**. The index also needs a moment to build on first use (**Refresh Drive index** forces it). |
+| Uploads land in **Drive root**, not the folder you chose | The chosen folder isn't writable under `drive.file` (e.g. a folder someone else shared with you). The plugin falls back to root and warns; pick a folder you own, or grant full Drive access. |
+| The **Picker** won't open | Recheck the **Picker API key** and **App ID** (Cloud project number) in settings, and that the **Google Picker API** is enabled. |
 
 ## Development
 
