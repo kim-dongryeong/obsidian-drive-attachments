@@ -23,6 +23,25 @@ import {
   SharedDriveRoot,
 } from "./driveMetadataService";
 import { DrivePreviewService } from "./drivePreviewService";
+import {
+  copyMenuTitle,
+  deleteForeverMenuTitle,
+  downloadMenuTitle,
+  formatCopySummary,
+  formatCount,
+  formatDownloadSummary,
+  formatMoveSummary,
+  formatPermanentDeleteSummary,
+  formatRestoreSummary,
+  formatStarredSummary,
+  formatTrashSummary,
+  isDownloadableDriveFile,
+  moveMenuTitle,
+  restoreMenuTitle,
+  sanitizeDownloadedFileName,
+  starMenuTitle,
+  trashMenuTitle,
+} from "./drivePanelText";
 import { CustomFileIconResolver, renderFileIcon } from "./driveFileIcon";
 import {
   copyDriveItemLink,
@@ -5887,10 +5906,6 @@ function formatPanelUploadSummary(targetName: string, stats: PanelDropUploadStat
   return `Drive panel upload complete: ${parts.join("; ")}.`;
 }
 
-function formatCount(count: number, singular: string): string {
-  return `${count} ${singular}${count === 1 ? "" : "s"}`;
-}
-
 function normalizeTypeAhead(value: string): string {
   return value.trimStart().toLowerCase();
 }
@@ -5931,136 +5946,3 @@ function folderColorHex(rgb: string | undefined): string | null {
   return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : null;
 }
 
-function trashMenuTitle(targets: DriveBrowserItem[]): string {
-  if (targets.length > 1) {
-    return `Move ${formatCount(targets.length, "item")} to trash`;
-  }
-  return "Move to trash";
-}
-
-function restoreMenuTitle(targets: DriveBrowserItem[]): string {
-  return targets.length > 1 ? `Restore ${formatCount(targets.length, "item")}` : "Restore";
-}
-
-function deleteForeverMenuTitle(targets: DriveBrowserItem[]): string {
-  return targets.length > 1 ? `Delete ${formatCount(targets.length, "item")} forever` : "Delete forever";
-}
-
-function moveMenuTitle(targets: DriveBrowserItem[]): string {
-  return targets.length > 1 ? `Move ${formatCount(targets.length, "item")}...` : "Move to...";
-}
-
-function starMenuTitle(targets: DriveBrowserItem[], remove: boolean): string {
-  if (targets.length === 1) {
-    return remove ? "Remove from Starred" : "Add to Starred";
-  }
-  return `${remove ? "Remove" : "Add"} ${formatCount(targets.length, "item")} ${remove ? "from" : "to"} Starred`;
-}
-
-function copyMenuTitle(targets: DriveBrowserItem[]): string {
-  return targets.length > 1 ? `Make ${formatCopyCount(targets.length)}` : "Make a copy";
-}
-
-function downloadMenuTitle(targets: DriveBrowserItem[], downloadableCount: number): string {
-  if (downloadableCount === 0) {
-    return "Download unavailable";
-  }
-  return targets.length > 1 ? `Download ${formatCount(downloadableCount, "file")}...` : "Download to vault";
-}
-
-function formatTrashSummary(trashed: number, failedNames: string[]): string {
-  const parts = [`${formatCount(trashed, "item")} moved to Drive trash`];
-  if (failedNames.length > 0) {
-    const shown = failedNames.slice(0, 3).join(", ");
-    const extra = failedNames.length > 3 ? `, +${failedNames.length - 3} more` : "";
-    parts.push(`${formatCount(failedNames.length, "item")} failed (${shown}${extra})`);
-  }
-  return `${parts.join("; ")}.`;
-}
-
-function formatRestoreSummary(restored: number, failedNames: string[]): string {
-  const parts = [`${formatCount(restored, "item")} restored from Drive trash`];
-  if (failedNames.length > 0) {
-    const shown = failedNames.slice(0, 3).join(", ");
-    const extra = failedNames.length > 3 ? `, +${failedNames.length - 3} more` : "";
-    parts.push(`${formatCount(failedNames.length, "item")} failed (${shown}${extra})`);
-  }
-  return `${parts.join("; ")}.`;
-}
-
-function formatPermanentDeleteSummary(deleted: number, failedNames: string[]): string {
-  const parts = [`${formatCount(deleted, "item")} permanently deleted from Drive`];
-  if (failedNames.length > 0) {
-    const shown = failedNames.slice(0, 3).join(", ");
-    const extra = failedNames.length > 3 ? `, +${failedNames.length - 3} more` : "";
-    parts.push(`${formatCount(failedNames.length, "item")} failed (${shown}${extra})`);
-  }
-  return `${parts.join("; ")}.`;
-}
-
-function formatMoveSummary(moved: number, failedNames: string[], targetName: string): string {
-  const parts = [`${formatCount(moved, "item")} moved to ${targetName}`];
-  if (failedNames.length > 0) {
-    const shown = failedNames.slice(0, 3).join(", ");
-    const extra = failedNames.length > 3 ? `, +${failedNames.length - 3} more` : "";
-    parts.push(`${formatCount(failedNames.length, "item")} failed (${shown}${extra})`);
-  }
-  return `${parts.join("; ")}.`;
-}
-
-function formatStarredSummary(updated: number, failedNames: string[], starred: boolean): string {
-  const parts = [
-    `${formatCount(updated, "item")} ${starred ? "added to" : "removed from"} Starred`,
-  ];
-  if (failedNames.length > 0) {
-    const shown = failedNames.slice(0, 3).join(", ");
-    const extra = failedNames.length > 3 ? `, +${failedNames.length - 3} more` : "";
-    parts.push(`${formatCount(failedNames.length, "item")} failed (${shown}${extra})`);
-  }
-  return `${parts.join("; ")}.`;
-}
-
-function formatCopySummary(copied: number, failedNames: string[], targetName: string): string {
-  const parts = [`${formatCopyCount(copied)} created in ${targetName}`];
-  if (failedNames.length > 0) {
-    const shown = failedNames.slice(0, 3).join(", ");
-    const extra = failedNames.length > 3 ? `, +${failedNames.length - 3} more` : "";
-    parts.push(`${formatCount(failedNames.length, "item")} failed (${shown}${extra})`);
-  }
-  return `${parts.join("; ")}.`;
-}
-
-function formatCopyCount(count: number): string {
-  return `${count} ${count === 1 ? "copy" : "copies"}`;
-}
-
-function formatDownloadSummary(savedPaths: string[], failedNames: string[], skippedUnsupported: number): string {
-  if (savedPaths.length === 1 && failedNames.length === 0 && skippedUnsupported === 0) {
-    return `Downloaded to ${savedPaths[0]}.`;
-  }
-
-  const parts = [`${formatCount(savedPaths.length, "file")} downloaded to the vault`];
-  if (skippedUnsupported > 0) {
-    parts.push(`${formatCount(skippedUnsupported, "unsupported item")} skipped`);
-  }
-  if (failedNames.length > 0) {
-    const shown = failedNames.slice(0, 3).join(", ");
-    const extra = failedNames.length > 3 ? `, +${failedNames.length - 3} more` : "";
-    parts.push(`${formatCount(failedNames.length, "file")} failed (${shown}${extra})`);
-  }
-  return `${parts.join("; ")}.`;
-}
-
-function isDownloadableDriveFile(item: DriveBrowserItem): boolean {
-  return item.mimeType !== DRIVE_FOLDER_MIME_TYPE && !item.mimeType.startsWith("application/vnd.google-apps.");
-}
-
-function sanitizeDownloadedFileName(name: string): string {
-  const sanitized = name
-    .trim()
-    .replace(/[\\/:*?"<>|\u0000-\u001F]/g, "-")
-    .replace(/\s+/g, " ")
-    .replace(/^\.+$/, "")
-    .trim();
-  return sanitized.length > 0 ? sanitized : "Downloaded Drive file";
-}
