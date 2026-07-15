@@ -204,6 +204,10 @@ export class DrivePanelView extends ItemView {
   // selection so a click then arrows feels continuous. `selectionAnchorId` stays the fixed end for
   // Shift-range extension; `activeItemId` is the moving end.
   private activeItemId: string | null = null;
+  // After navigating up a level, the cursor should land on the child folder we just left (Finder
+  // behaviour) rather than the top of the list. navigateUp records that folder id here; the next
+  // load applies it once the parent's items are present.
+  private pendingActiveItemId: string | null = null;
   private listEl: HTMLElement | null = null;
   private listFolderId: string | null = null;
   private activeRowEl: HTMLElement | null = null;
@@ -923,6 +927,7 @@ export class DrivePanelView extends ItemView {
       this.loadingFolderId = null;
       this.errorMessage = null;
       this.pruneSelection(this.folderCache.get(folderId) ?? []);
+      this.applyPendingActiveItem();
       this.render();
       return;
     }
@@ -948,6 +953,7 @@ export class DrivePanelView extends ItemView {
     } finally {
       if (generation === this.loadGeneration) {
         this.loadingFolderId = null;
+        this.applyPendingActiveItem();
         this.render();
       }
     }
@@ -1978,7 +1984,28 @@ export class DrivePanelView extends ItemView {
     switch (evt.key) {
       case "ArrowDown":
         evt.preventDefault();
+        // At the last item with more pages pending, arrow-down pulls the next page (keyboard parity
+        // with the mouse-only "Load more" row) rather than dead-ending at the bottom.
+        if (this.tryLoadMoreAtBottom()) {
+          return;
+        }
         this.moveActiveCursor(this.verticalStep(), evt.shiftKey);
+        return;
+      case "Home":
+        evt.preventDefault();
+        this.setActiveCursorToIndex(0, evt.shiftKey);
+        return;
+      case "End":
+        evt.preventDefault();
+        this.setActiveCursorToIndex(this.getCurrentItems().length - 1, evt.shiftKey);
+        return;
+      case "PageDown":
+        evt.preventDefault();
+        this.moveActiveCursor(this.pageStep(), evt.shiftKey);
+        return;
+      case "PageUp":
+        evt.preventDefault();
+        this.moveActiveCursor(-this.pageStep(), evt.shiftKey);
         return;
       case "ArrowUp":
         evt.preventDefault();
@@ -2131,6 +2158,49 @@ export class DrivePanelView extends ItemView {
     }
   }
 
+  // Move the cursor to an absolute index (Home/End), clamped into range.
+  private setActiveCursorToIndex(index: number, extend: boolean): void {
+    const items = this.getCurrentItems();
+    if (items.length === 0) {
+      return;
+    }
+    this.resetTypeAheadBuffer();
+    const target = items[Math.min(items.length - 1, Math.max(0, index))];
+    this.scrollActiveIntoView = true;
+    if (extend) {
+      this.selectRangeTo(target.id, true);
+    } else {
+      this.selectOnly(target.id, true);
+    }
+  }
+
+  // How many items a PageUp/PageDown jumps: about one viewport of rows (grid multiplies by columns).
+  private pageStep(): number {
+    const list = this.listEl;
+    const rows = list ? Array.from(list.querySelectorAll<HTMLElement>(".gdab-drive-panel-row")) : [];
+    const rowHeight = rows[0]?.offsetHeight || 28;
+    const visibleRows = list ? Math.max(1, Math.floor(list.clientHeight / rowHeight) - 1) : 10;
+    const columns = this.getSettings().panelViewMode === "grid" ? this.gridColumnCount() : 1;
+    return visibleRows * columns;
+  }
+
+  // When the cursor is on the last item and the listing has another Drive page, fetch it (keyboard
+  // equivalent of clicking "Load more"). Returns true if it kicked off a load.
+  private tryLoadMoreAtBottom(): boolean {
+    if (this.isDriveSearchActive() || this.loadingMoreFolderId !== null) {
+      return false;
+    }
+    const items = this.getCurrentItems();
+    if (items.length === 0 || this.activeItemId !== items[items.length - 1].id) {
+      return false;
+    }
+    if (!this.folderNextPageToken.has(this.currentLocation.id)) {
+      return false;
+    }
+    void this.loadMoreCurrentFolder();
+    return true;
+  }
+
   // Vertical arrow step: one item in the single-column list/compact views, a full row (the live
   // column count) in the responsive grid so ↑/↓ move between rows and ←/→ move within a row.
   private verticalStep(): number {
@@ -2199,12 +2269,33 @@ export class DrivePanelView extends ItemView {
     if (this.path.length <= 1) {
       return;
     }
+    // Remember the folder we're leaving so the cursor lands back on it in the parent (Finder/Explorer).
+    const exitedFolderId = this.path[this.path.length - 1].id;
     this.exitDriveSearch();
     this.resetTypeAheadBuffer();
     this.path.pop();
     this.pushHistory();
     this.clearSelection(false);
+    this.pendingActiveItemId = exitedFolderId;
     void this.loadCurrentFolder(false);
+  }
+
+  // Consume pendingActiveItemId (set by navigateUp): if that folder is in the freshly-loaded list,
+  // make it the active/selected cursor and scroll it into view. Called right before each of
+  // loadCurrentFolder's renders. No-op (and clears the pending id) when the folder isn't present.
+  private applyPendingActiveItem(): void {
+    const id = this.pendingActiveItemId;
+    this.pendingActiveItemId = null;
+    if (!id || this.isDriveSearchActive()) {
+      return;
+    }
+    if (this.getCurrentItems().some((item) => item.id === id)) {
+      this.selectedItemIds.clear();
+      this.selectedItemIds.add(id);
+      this.selectionAnchorId = id;
+      this.activeItemId = id;
+      this.scrollActiveIntoView = true;
+    }
   }
 
   private navigateToFolder(item: DriveBrowserItem): void {
