@@ -724,8 +724,12 @@
   --gdab-surface: transparent;
   --gdab-grid-card: transparent;
   --gdab-row-hover: var(--background-modifier-hover);
-  --gdab-row-selected: rgba(var(--gdab-accent-rgb), 0.16);
-  --gdab-row-selected-ring: rgba(var(--gdab-accent-rgb), 0.36);
+  /* color-mix on --interactive-accent (always a valid color) instead of rgba(--…-rgb, …): some
+     Obsidian themes don't define --interactive-accent-rgb, which made these an INVALID color — so
+     multi-selected rows (whose fill/ring is all that marks them) showed nothing. Also a touch
+     stronger so several selected rows read clearly, Finder-style. */
+  --gdab-row-selected: color-mix(in srgb, var(--interactive-accent) 18%, transparent);
+  --gdab-row-selected-ring: color-mix(in srgb, var(--interactive-accent) 45%, transparent);
   --gdab-row-radius: 6px;
   --gdab-divider: var(--background-modifier-border);
   --gdab-divider-hover: var(--background-modifier-border-hover, var(--background-modifier-border));
