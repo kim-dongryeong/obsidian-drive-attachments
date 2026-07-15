@@ -1204,6 +1204,19 @@ export class DrivePanelView extends ItemView {
       return this.renderAddressBar(breadcrumbs);
     }
 
+    // While searching, the results can come from anywhere in Drive, so the path trail is meaningless
+    // — show "Search results" instead (drive.google.com parity). Each result's true location is
+    // reachable via its row menu's "Open location".
+    if (this.isDriveSearchActive()) {
+      breadcrumbs.addClass("is-search-results");
+      breadcrumbs.createSpan({
+        cls: "gdab-drive-panel-breadcrumb is-current",
+        text: "Search results",
+        attr: { "aria-current": "true" },
+      });
+      return null;
+    }
+
     breadcrumbs.addEventListener("click", (evt) => {
       if (evt.target === breadcrumbs) {
         this.startAddressBarEdit();
@@ -2328,6 +2341,21 @@ export class DrivePanelView extends ItemView {
     void this.loadCurrentFolder(false);
   }
 
+  // "Open location" for a search result: open the folder the item lives in (its parent) and put the
+  // cursor on the item. The hit carries parent ids (server) + a precomputed folder path (index).
+  private openItemLocation(item: DriveBrowserItem): void {
+    const parentId = item.parents?.[0];
+    if (!parentId) {
+      new Notice("This item has no accessible parent folder to open.");
+      return;
+    }
+    const parentName = item.path?.split("/").filter(Boolean).pop() || "Folder";
+    // navigateToFolder reads isDriveSearchActive() to open the parent as a fresh location; set the
+    // pending cursor first so the item is highlighted once the parent's listing loads.
+    this.pendingActiveItemId = item.id;
+    this.navigateToFolder({ id: parentId, name: parentName, mimeType: DRIVE_FOLDER_MIME_TYPE });
+  }
+
   // Seed history with the current path as the single entry (panel open / re-open).
   private resetHistory(): void {
     this.navHistory = [this.snapshotPath()];
@@ -2423,6 +2451,13 @@ export class DrivePanelView extends ItemView {
     menu.addItem((mi) =>
       mi.setTitle("Open in Drive").setIcon("external-link").onClick(() => openDriveItemInBrowser(item)),
     );
+    // "Open location" for a search hit: jump to the folder the item actually lives in (drive.google.com
+    // parity). Only meaningful while searching, where the result isn't a child of the current folder.
+    if (this.isDriveSearchActive() && item.parents && item.parents.length > 0) {
+      menu.addItem((mi) =>
+        mi.setTitle("Open location").setIcon("folder-tree").onClick(() => this.openItemLocation(item)),
+      );
+    }
 
     // Insert group — plugin-native (no Drive equivalent); kept prominent since inserting Drive
     // links into notes is this plugin's core workflow.
