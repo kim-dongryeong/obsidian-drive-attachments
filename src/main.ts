@@ -3,7 +3,7 @@ import { DriveAuthService } from "./driveAuthService";
 import { CustomIconPackService } from "./customIconPack";
 import { askDriveDedupAction } from "./driveDedupModal";
 import { computeMd5HexFromSource, DriveDedupHit, DriveDedupService } from "./driveDedupService";
-import { DriveIndexService } from "./driveIndexService";
+import { DriveIndexService, PersistedDriveIndexSnapshot } from "./driveIndexService";
 import { DriveMediaProxyService } from "./driveMediaProxyService";
 import { DriveMetadataService } from "./driveMetadataService";
 import { DRIVE_PANEL_VIEW_TYPE, DrivePanelView } from "./drivePanelView";
@@ -62,7 +62,26 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
     this.auth = new DriveAuthService(() => this.settings, () => this.saveSettings());
     this.picker = new DrivePickerService(() => this.settings);
     this.metadata = new DriveMetadataService(this.auth);
-    this.index = new DriveIndexService(this.auth, () => this.settings.indexPageLimit);
+    // Persist the Drive index to a sidecar file (not data.json — a large snapshot would bloat the
+    // settings the plugin rewrites on every change) so a restart hydrates + delta-syncs instead of
+    // re-crawling the whole Drive (T-010).
+    const indexSnapshotPath = `${this.manifest.dir ?? this.app.vault.configDir + "/plugins/drive-attachments"}/drive-index.json`;
+    const adapter = this.app.vault.adapter;
+    this.index = new DriveIndexService(this.auth, () => this.settings.indexPageLimit, {
+      async load() {
+        try {
+          if (!(await adapter.exists(indexSnapshotPath))) {
+            return null;
+          }
+          return JSON.parse(await adapter.read(indexSnapshotPath)) as PersistedDriveIndexSnapshot;
+        } catch {
+          return null;
+        }
+      },
+      async save(snapshot) {
+        await adapter.write(indexSnapshotPath, JSON.stringify(snapshot));
+      },
+    });
     this.search = new DriveSearchService(this.auth);
     this.upload = new DriveUploadService(this.auth);
     this.mediaProxy = new DriveMediaProxyService(this.auth);

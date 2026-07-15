@@ -2,6 +2,9 @@
 data.json
 **/data.json
 *.token
+# Local runtime cache (persisted Drive index snapshot)
+drive-index.json
+**/drive-index.json
 .env
 .env.*
 

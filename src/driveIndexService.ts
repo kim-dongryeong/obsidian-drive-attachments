@@ -40,6 +40,24 @@ const DRIVE_INDEX_FULL_REBUILD_TTL_MS = 60 * 60 * 1000;
 // rendered location path), precomputed by `computeItemPaths` so path search never walks per keystroke.
 export type DriveIndexItem = DrivePickerItem & { parents?: string[]; md5Checksum?: string; size?: string; path?: string };
 
+// On-disk index snapshot (T-010). Restart hydrates from this and delta-syncs via the Changes API
+// instead of re-crawling the whole Drive, so the first search after an Obsidian restart is instant.
+// `startPageToken` is the Changes cursor; without it the snapshot can't be caught up, so it's not kept.
+export const DRIVE_INDEX_SNAPSHOT_SCHEMA = 1;
+
+export interface PersistedDriveIndexSnapshot {
+  schemaVersion: number;
+  fetchedAt: string;
+  startPageToken: string | null;
+  files: DriveIndexItem[];
+  folders: DriveIndexItem[];
+}
+
+export interface DriveIndexPersistence {
+  load(): Promise<PersistedDriveIndexSnapshot | null>;
+  save(snapshot: PersistedDriveIndexSnapshot): Promise<void>;
+}
+
 export interface DriveIndexState {
   items: DriveIndexItem[];
   isLoading: boolean;
@@ -90,10 +108,13 @@ export class DriveIndexService {
   // Bumped at the start of every full refresh so an in-flight changes sync can tell its snapshot
   // is obsolete and abandon, instead of clobbering the rebuild (two writers on `items`).
   private refreshGeneration = 0;
+  // One-shot disk hydration (T-010): load the persisted snapshot before the first crawl decision.
+  private hydrated = false;
 
   constructor(
     private readonly auth: DriveAuthService,
     private readonly getMaxPages: () => number = () => DRIVE_INDEX_MAX_PAGES,
+    private readonly persistence?: DriveIndexPersistence,
   ) {}
 
   getState(): DriveIndexState {
@@ -173,6 +194,10 @@ export class DriveIndexService {
     if (this.loadPromise) {
       return this.loadPromise;
     }
+    // First call: hydrate the persisted snapshot, then re-enter with a (possibly) warm index.
+    if (!this.hydrated) {
+      return this.hydrateOnce().then(() => this.ensureLoaded());
+    }
 
     // Re-use the cached index only after a clean load that ran to completion (full or page-capped).
     // A load that errored mid-flight leaves `lastLoadedAt` null and possibly a partial `items`; that
@@ -201,6 +226,63 @@ export class DriveIndexService {
     return this.refresh();
   }
 
+  // Load the on-disk snapshot into memory once, so the first ensureLoaded() delta-syncs instead of
+  // full-crawling. Marks the index "warm" (lastLoadedAt = now) with the snapshot's Changes cursor, so
+  // the very next load catches up all changes since the snapshot (or falls back to a full rebuild if
+  // the token is invalid / there are too many changes). A completed/in-flight load takes precedence.
+  private async hydrateOnce(): Promise<void> {
+    if (this.hydrated) {
+      return;
+    }
+    this.hydrated = true;
+    if (!this.persistence) {
+      return;
+    }
+    try {
+      const snapshot = await this.persistence.load();
+      if (
+        !snapshot ||
+        snapshot.schemaVersion !== DRIVE_INDEX_SNAPSHOT_SCHEMA ||
+        !snapshot.startPageToken ||
+        this.lastLoadedAt !== null ||
+        this.isLoading
+      ) {
+        return;
+      }
+      this.items = Array.isArray(snapshot.files) ? snapshot.files.filter(isUsableDriveIndexItem) : [];
+      this.folderIndex = Array.isArray(snapshot.folders) ? snapshot.folders : [];
+      this.changePageToken = snapshot.startPageToken;
+      this.computeItemPaths();
+      const now = Date.now();
+      // Timers reset from restart: the Changes cursor (not the age) decides what to catch up, and the
+      // 1h full-rebuild net now applies to this session so a long-lived snapshot still self-refreshes.
+      this.lastLoadedAt = now;
+      this.lastFullLoadAt = now;
+    } catch (error: unknown) {
+      console.warn("[Drive Attachments] Could not load the persisted Drive index; will rebuild.", error);
+    }
+  }
+
+  // Write the current index to disk (best-effort). Skipped without a Changes cursor — a snapshot that
+  // can't be caught up is useless to hydrate.
+  private async persist(): Promise<void> {
+    if (!this.persistence || !this.changePageToken) {
+      return;
+    }
+    const snapshot: PersistedDriveIndexSnapshot = {
+      schemaVersion: DRIVE_INDEX_SNAPSHOT_SCHEMA,
+      fetchedAt: new Date().toISOString(),
+      startPageToken: this.changePageToken,
+      files: this.items,
+      folders: this.folderIndex,
+    };
+    try {
+      await this.persistence.save(snapshot);
+    } catch (error: unknown) {
+      console.warn("[Drive Attachments] Could not persist the Drive index snapshot.", error);
+    }
+  }
+
   hasChangePageToken(): boolean {
     return this.changePageToken !== null;
   }
@@ -218,6 +300,8 @@ export class DriveIndexService {
       return this.loadPromise;
     }
 
+    // A full rebuild supersedes any persisted snapshot, so hydration must never run afterwards.
+    this.hydrated = true;
     this.refreshGeneration += 1;
     this.items = [];
     this.folderIndex = [];
@@ -251,6 +335,7 @@ export class DriveIndexService {
         // serve the partial list forever and a consumer could never tell a real load from a failure.
         this.lastLoadedAt = Date.now();
         this.lastFullLoadAt = this.lastLoadedAt;
+        void this.persist();
         return this.getItems();
       })
       .catch((error: unknown) => {
@@ -330,6 +415,12 @@ export class DriveIndexService {
     this.changePageToken = newStartPageToken;
     this.lastLoadedAt = Date.now();
     this.lastError = null;
+    // Re-persist only when something actually changed (the common no-op sync writes nothing); keeps
+    // the on-disk Changes cursor current so the next restart catches up from here, not from the last
+    // full crawl.
+    if (changes.length > 0) {
+      void this.persist();
+    }
     return this.getItems();
   }
 
