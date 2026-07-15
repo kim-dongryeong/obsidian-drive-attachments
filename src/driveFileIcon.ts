@@ -24,7 +24,11 @@ export function renderFileIcon(
         alt: "",
         width: "16",
         height: "16",
-        loading: "lazy",
+        // Eager, not lazy: these are tiny local (data:/app://) icons. Lazy-loading makes a freshly
+        // created <img> start blank and then load — which, when a list re-renders (e.g. the search
+        // modal repainting every 300ms while the index streams), blinks the icons on every pass.
+        loading: "eager",
+        decoding: "sync",
       },
     });
     // A pack icon that was deleted (or is unreadable) would otherwise render as a broken-image glyph.

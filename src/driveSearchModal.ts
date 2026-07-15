@@ -40,6 +40,8 @@ function tokenizePathSearchQuery(query: string): string[] {
 export class DriveSearchModal extends FuzzySuggestModal<DriveIndexItem> {
   private loadGeneration = 0;
   private refreshTimer: number | null = null;
+  // Item count at the last streaming repaint — skip a re-render when a poll tick brought no new items.
+  private lastRefreshItemCount = 0;
   private lastIndexErrorNotice: string | null = null;
   private serverGeneration = 0;
   private serverFallbackTimer: number | null = null;
@@ -494,13 +496,20 @@ export class DriveSearchModal extends FuzzySuggestModal<DriveIndexItem> {
 
   private startRefreshTimer(): void {
     this.stopRefreshTimer();
+    this.lastRefreshItemCount = this.index.getProgress().itemCount;
     this.refreshTimer = window.setInterval(() => {
       const progress = this.index.getProgress();
       this.setIndexProgress(progress);
-      if (!progress.isLoading) {
+      const finished = !progress.isLoading;
+      if (finished) {
         this.stopRefreshTimer();
       }
-      this.refreshSuggestions();
+      // Only repaint the list when the index actually grew (or the crawl just finished): a full
+      // re-render on every tick with no new items just blinks the existing rows for nothing.
+      if (progress.itemCount !== this.lastRefreshItemCount || finished) {
+        this.lastRefreshItemCount = progress.itemCount;
+        this.refreshSuggestions();
+      }
     }, 300);
   }
 
