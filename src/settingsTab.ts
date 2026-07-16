@@ -290,23 +290,6 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName("Drive panel").setHeading();
 
     new Setting(containerEl)
-      .setName("Local file drops")
-      .setDesc(
-        "What to do when you drop local files or folders onto the Drive sidebar panel. Confirm shows the target folder first; Direct uploads immediately; Off disables panel drops.",
-      )
-      .addDropdown((dropdown) => {
-        dropdown
-          .addOption("confirm", "Confirm before uploading")
-          .addOption("direct", "Upload immediately (default)")
-          .addOption("off", "Off")
-          .setValue(this.plugin.settings.panelDropUpload)
-          .onChange(async (value) => {
-            this.plugin.settings.panelDropUpload = isPanelDropUploadMode(value) ? value : "confirm";
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(containerEl)
       .setName("Drag-out format")
       .setDesc(
         "What dragging a Drive panel row (or selection) out onto a note inserts at the drop point. " +
@@ -631,6 +614,24 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl).setName("Panel extras").setHeading();
+
+    new Setting(containerEl)
+      .setName("Local file drops")
+      .setDesc(
+        "What to do when you drop local files or folders onto the Drive sidebar panel. Confirm shows the target folder first; Direct uploads immediately; Off disables panel drops.",
+      )
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("confirm", "Confirm before uploading")
+          .addOption("direct", "Upload immediately (default)")
+          .addOption("off", "Off")
+          .setValue(this.plugin.settings.panelDropUpload)
+          .onChange(async (value) => {
+            this.plugin.settings.panelDropUpload = isPanelDropUploadMode(value) ? value : "confirm";
+            await this.plugin.saveSettings();
+          });
+      });
+
 
     new Setting(containerEl)
       .setName("Details bar")

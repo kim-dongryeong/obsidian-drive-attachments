@@ -7,7 +7,6 @@ import {
   Notice,
   Scope,
   setIcon,
-  setTooltip,
   TFile,
   WorkspaceLeaf,
 } from "obsidian";
@@ -285,6 +284,10 @@ export class DrivePanelView extends ItemView {
         }
       },
       showUploadCard: (state) => this.renderUploadCard(state),
+      existingTargetNames: async (targetId) => {
+        const items = await this.data.getBreadcrumbFolderItems(targetId);
+        return new Set(items.map((item) => item.name));
+      },
     });
     this.searchCtl = new DrivePanelSearchController(index, search, {
       currentPath: () => this.path,
@@ -408,10 +411,9 @@ export class DrivePanelView extends ItemView {
     }
     const active = mode !== "off" && canDrop;
     this.setPanelDropHighlight(active);
-    if (this.uploadCtl.inFlight) {
-      // The OS shows a no-drop cursor and the drop event never fires, so without this the drag
-      // just silently bounces (kdr QA) — say why while the drag hovers the panel.
-      this.setDropHint("Wait for the current upload to finish before dropping more files.");
+    if (active && this.uploadCtl.inFlight) {
+      // An upload is running: the drop is accepted and queued (drive.google.com behavior).
+      this.setDropHint("Drop to queue — uploads after the current batch.");
       return;
     }
     this.setDropHint(active ? `Upload to "${this.currentLocation.name}"` : null);
@@ -442,10 +444,10 @@ export class DrivePanelView extends ItemView {
   }
 
   private canAcceptPanelDrop(target: DrivePanelLocation = this.currentLocation): boolean {
+    // An in-flight upload no longer blocks the drop — it queues (drive.google.com behavior).
     return !isVirtualRootId(target.id)
       && this.getSettings().panelDropUpload !== "off"
-      && this.canBrowse()
-      && !this.uploadCtl.inFlight;
+      && this.canBrowse();
   }
 
   private setPanelDropHighlight(active: boolean): void {
@@ -4023,15 +4025,11 @@ export class DrivePanelView extends ItemView {
           .setIcon("trash-2")
           .setChecked(this.trashSortOverride === null)
           .onClick(() => this.setTrashSort({ clearKey: true }));
-        // Honest labelling, as a hover tooltip: Drive's API gives a real trashedTime only for
-        // shared-drive items, so My Drive trash approximates with the modified date. (A fragment
-        // title renders flattened into one line inside Menu, so a tooltip is the reliable spot.)
-        const dom = (mi as unknown as { dom?: HTMLElement }).dom;
-        if (dom) {
-          // Obsidian's setTooltip — a bare title= attribute never shows inside its menus.
-          setTooltip(dom, "My Drive items sort by modified date — the Drive API only provides a trashed time for shared-drive items.", { placement: "right" });
-        }
       });
+      // Honest labelling, always visible: menu tooltips proved unreliable on kdr's setup (neither
+      // title= nor setTooltip shows inside Obsidian menus), so a muted non-clickable label line
+      // sits right under the option. Drive's API gives a real trashedTime only for shared-drive items.
+      menu.addItem((mi) => mi.setTitle("· My Drive items: by modified date (API limit)").setIsLabel(true));
     }
     const driveKeys: Array<{ key: PanelSortKey; label: string; icon: string }> = [
       { key: "name", label: "Name", icon: "case-sensitive" },

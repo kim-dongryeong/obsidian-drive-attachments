@@ -1,6 +1,5 @@
 import { Notice } from "obsidian";
-import { DriveDedupHit, DriveDedupService } from "./driveDedupService";
-import { computeMd5HexFromSource } from "./driveDedupService";
+import { DriveDedupService } from "./driveDedupService";
 import { DriveUploadService, FileUploadSource } from "./driveUploadService";
 import { formatCount } from "./drivePanelText";
 import {
@@ -41,6 +40,9 @@ export interface DrivePanelUploadHost {
   refreshTargetFolder(targetId: string): Promise<void>;
   // Show/update the in-panel upload progress card (drive.google.com-style). null hides it.
   showUploadCard(state: PanelUploadCardState | null): void;
+  // Names already present in the target folder (first page of its listing) — used to uniquify
+  // upload names with " (1)", " (2)" suffixes the way drive.google.com does.
+  existingTargetNames(targetId: string): Promise<Set<string>>;
 }
 
 // What the in-panel upload card renders: the target, overall progress, the file in flight, and
@@ -64,6 +66,9 @@ export class DrivePanelUploadController {
   inFlight = false;
   // Set by the card's Cancel button; the upload loops check it between files and stop early.
   private cancelRequested = false;
+  // Drops made while an upload runs wait here and start in order when the current batch finishes
+  // (drive.google.com queues uploads instead of rejecting them).
+  private readonly queue: Array<{ entries: FileSystemEntry[]; files: File[]; target: DrivePanelLocation }> = [];
 
   constructor(
     private readonly upload: DriveUploadService,
@@ -120,6 +125,13 @@ export class DrivePanelUploadController {
   }
 
   startPanelDropUpload(entries: FileSystemEntry[], files: File[], target: DrivePanelLocation): void {
+    if (this.inFlight) {
+      // Queue instead of rejecting (drive.google.com behavior): this batch starts when the
+      // running one finishes.
+      this.queue.push({ entries, files, target });
+      new Notice(`Queued for upload to ${target.name} — starts after the current upload.`);
+      return;
+    }
     if (!this.canStartPanelDropUpload()) {
       return;
     }
@@ -152,17 +164,39 @@ export class DrivePanelUploadController {
       return false;
     }
 
-    if (this.inFlight) {
-      new Notice("Wait for the current Drive upload to finish before dropping more files.");
-      return false;
-    }
-
     if (!this.host.canBrowse()) {
       new Notice("Connect Google Drive with browsing access before dropping files onto the Drive panel.");
       return false;
     }
 
     return true;
+  }
+
+  // Start the next queued batch, if any, once the current one fully settles.
+  private drainQueue(): void {
+    const next = this.queue.shift();
+    if (next) {
+      this.startPanelDropUpload(next.entries, next.files, next.target);
+    }
+  }
+
+  // Uniquify against the target folder the way drive.google.com does: "name.ext" → "name (1).ext",
+  // counting up until free. `taken` accumulates this batch's own uploads too.
+  private uniquifyName(name: string, taken: Set<string>): string {
+    if (!taken.has(name.toLowerCase())) {
+      taken.add(name.toLowerCase());
+      return name;
+    }
+    const dot = name.lastIndexOf(".");
+    const stem = dot > 0 ? name.slice(0, dot) : name;
+    const ext = dot > 0 ? name.slice(dot) : "";
+    for (let n = 1; ; n += 1) {
+      const candidate = `${stem} (${n})${ext}`;
+      if (!taken.has(candidate.toLowerCase())) {
+        taken.add(candidate.toLowerCase());
+        return candidate;
+      }
+    }
   }
 
   // The card's Cancel button: stop before the next file (the file currently uploading finishes).
@@ -193,6 +227,12 @@ export class DrivePanelUploadController {
     };
     const progress = new Notice(formatPanelUploadProgress(0, files.length, target.name, stats), 0);
     let cancelled = false;
+    let takenNames: Set<string>;
+    try {
+      takenNames = new Set([...(await this.host.existingTargetNames(target.id))].map((n) => n.toLowerCase()));
+    } catch {
+      takenNames = new Set();
+    }
 
     try {
       for (let index = 0; index < files.length; index += 1) {
@@ -205,20 +245,13 @@ export class DrivePanelUploadController {
         progress.setMessage(formatPanelUploadProgress(index + 1, files.length, target.name, stats, file.name));
 
         try {
-          const source = new FileUploadSource(file);
-          const md5 = await computeMd5HexFromSource(source);
-          const duplicate = await this.findPanelDropDuplicate(md5, file.name);
-
-          if (duplicate) {
-            stats.skippedDuplicates += 1;
-            progress.setMessage(formatPanelUploadProgress(index + 1, files.length, target.name, stats));
-            continue;
-          }
-
+          // drive.google.com parity (kdr QA): never skip as a "duplicate" — a same-named file
+          // uploads under "name (1).ext". (The old md5 skip also disagreed with the tree path,
+          // which always re-uploaded — one drop shape skipped, the other didn't.)
           await this.upload.uploadFile({
-            name: file.name,
+            name: this.uniquifyName(file.name, takenNames),
             mimeType: file.type || "application/octet-stream",
-            source,
+            source: new FileUploadSource(file),
             parentFolderId: target.id,
             allowRootFallback: false,
           });
@@ -243,6 +276,7 @@ export class DrivePanelUploadController {
 
     const summary = formatPanelUploadSummary(target.name, stats);
     new Notice(cancelled ? `Upload cancelled. ${summary}` : summary, stats.failed > 0 ? 10_000 : 5_000);
+    this.drainQueue();
   }
 
   // Folder drop (Phase B): recreate the dropped directory tree under `target`, then upload each file
@@ -284,6 +318,16 @@ export class DrivePanelUploadController {
         return;
       }
 
+      // Root-level name pool for drive.google.com-style " (1)" suffixes: what the target already
+      // holds. Only entries created DIRECTLY in the target need uniquifying — everything deeper
+      // goes into folders this drop just created.
+      let rootNames: Set<string>;
+      try {
+        rootNames = new Set([...(await this.host.existingTargetNames(target.id))].map((n) => n.toLowerCase()));
+      } catch {
+        rootNames = new Set();
+      }
+
       // Memoized, parent-first folder creation. The key is the relative dir path joined by "/"; ""
       // maps to the drop target itself so root-level loose files upload straight into it.
       const folderIdByPath = new Map<string, string>([["", target.id]]);
@@ -294,7 +338,9 @@ export class DrivePanelUploadController {
           return existing;
         }
         const parentId = await ensureFolder(dir.slice(0, -1));
-        const id = await this.upload.createFolder(dir[dir.length - 1], parentId);
+        const rawName = dir[dir.length - 1];
+        const folderName = dir.length === 1 ? this.uniquifyName(rawName, rootNames) : rawName;
+        const id = await this.upload.createFolder(folderName, parentId);
         foldersCreated += 1;
         folderIdByPath.set(key, id);
         return id;
@@ -325,7 +371,7 @@ export class DrivePanelUploadController {
         try {
           const parentId = await ensureFolder(dir);
           await this.upload.uploadFile({
-            name: file.name,
+            name: dir.length === 0 ? this.uniquifyName(file.name, rootNames) : file.name,
             mimeType: file.type || "application/octet-stream",
             source: new FileUploadSource(file),
             parentFolderId: parentId,
@@ -357,16 +403,6 @@ export class DrivePanelUploadController {
         new Notice(summary, stats.failed > 0 ? 10_000 : 5_000);
       }
     }
-  }
-
-  // Panel drops are Drive-only (no note context), so Direct mode auto-reuses an existing Drive copy
-  // instead of opening the editor-drop dedup modal.
-  private async findPanelDropDuplicate(md5: string, fileName: string): Promise<DriveDedupHit | null> {
-    try {
-      return await this.dedup.findDuplicate({ md5, fileName });
-    } catch (error) {
-      console.warn("[Drive Attachments] Panel upload dedup check failed; proceeding with upload.", error);
-      return null;
-    }
+    this.drainQueue();
   }
 }
