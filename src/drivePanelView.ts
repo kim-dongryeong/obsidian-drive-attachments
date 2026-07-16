@@ -253,6 +253,11 @@ export class DrivePanelView extends ItemView {
   private readonly thumbnails: DriveThumbnailService;
   // View-side lazy-thumbnail machinery (observer/queue/failures) — see drivePanelThumbnails.ts.
   private readonly panelThumbnails: DrivePanelThumbnails;
+  // Trash-only sort state (session-scoped, not persisted): drive.google.com's Trash defaults to
+  // "Date trashed" — a key that doesn't exist outside the Trash view, so it can't live in
+  // panelSortKey. null = Date trashed; a PanelSortKey overrides it for this view instance.
+  private trashSortOverride: PanelSortKey | null = null;
+  private trashSortDir: PanelSortDir = "desc";
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -2031,7 +2036,10 @@ export class DrivePanelView extends ItemView {
     if (evt.key === "F2") {
       const active = this.getActiveItem();
       if (active) {
+        // stopPropagation too: Obsidian's global F2 hotkey (rename the active note title) also
+        // listens on keydown and would otherwise steal focus to the editor (kdr QA).
         evt.preventDefault();
+        evt.stopPropagation();
         this.resetTypeAheadBuffer();
         this.openRenameModal(active);
       }
@@ -2045,6 +2053,7 @@ export class DrivePanelView extends ItemView {
       const active = this.getActiveItem();
       if (active) {
         evt.preventDefault();
+        evt.stopPropagation();
         this.resetTypeAheadBuffer();
         this.openMenuForActiveRow(active);
       }
@@ -3804,8 +3813,10 @@ export class DrivePanelView extends ItemView {
     }
     const s = this.getSettings();
     if (!this.isDriveSearchActive() && this.isInTrashPath()) {
-      // Trash orders by "date trashed", newest first — drive.google.com's default for that view.
-      return sortDriveItemsByTrashedTime(filtered, s.panelFoldersFirst);
+      // Trash defaults to "Date trashed" (drive.google.com); the Sort menu can override per session.
+      return this.trashSortOverride
+        ? sortDriveItems(filtered, this.trashSortOverride, this.trashSortDir, s.panelFoldersFirst)
+        : sortDriveItemsByTrashedTime(filtered, s.panelFoldersFirst, this.trashSortDir);
     }
     return sortDriveItems(filtered, s.panelSortKey, s.panelSortDir, s.panelFoldersFirst);
   }
@@ -4511,8 +4522,20 @@ export class DrivePanelView extends ItemView {
   private openSortMenu(evt: MouseEvent): void {
     const s = this.getSettings();
     const menu = new Menu();
+    const inTrash = this.isInTrashPath();
+    const checkedKey: PanelSortKey | null = inTrash ? this.trashSortOverride : s.panelSortKey;
 
     menu.addItem((mi) => mi.setTitle("Sort by").setIsLabel(true));
+    if (inTrash) {
+      // Trash-only key, checked by default — drive.google.com's Trash sorts by trashed date.
+      menu.addItem((mi) =>
+        mi
+          .setTitle("Date trashed")
+          .setIcon("trash-2")
+          .setChecked(this.trashSortOverride === null)
+          .onClick(() => this.setTrashSort({ clearKey: true })),
+      );
+    }
     const driveKeys: Array<{ key: PanelSortKey; label: string; icon: string }> = [
       { key: "name", label: "Name", icon: "case-sensitive" },
       { key: "modified", label: "Date modified", icon: "clock" },
@@ -4528,8 +4551,10 @@ export class DrivePanelView extends ItemView {
         mi
           .setTitle(k.label)
           .setIcon(k.icon)
-          .setChecked(s.panelSortKey === k.key)
-          .onClick(() => void this.setSortSetting({ key: k.key })),
+          .setChecked(checkedKey === k.key)
+          .onClick(() =>
+            inTrash ? this.setTrashSort({ key: k.key }) : void this.setSortSetting({ key: k.key }),
+          ),
       );
     };
     driveKeys.forEach(addKeyItem);
@@ -4538,13 +4563,18 @@ export class DrivePanelView extends ItemView {
 
     menu.addSeparator();
     menu.addItem((mi) => mi.setTitle("Sort direction").setIsLabel(true));
-    for (const opt of sortDirectionOptions(s.panelSortKey)) {
+    // Date-trashed is a date key, so its direction labels read New↔old like the other date keys.
+    const directionKey = inTrash ? (this.trashSortOverride ?? "modified") : s.panelSortKey;
+    const checkedDir = inTrash ? this.trashSortDir : s.panelSortDir;
+    for (const opt of sortDirectionOptions(directionKey)) {
       menu.addItem((mi) =>
         mi
           .setTitle(opt.label)
           .setIcon(opt.icon)
-          .setChecked(s.panelSortDir === opt.dir)
-          .onClick(() => void this.setSortSetting({ dir: opt.dir })),
+          .setChecked(checkedDir === opt.dir)
+          .onClick(() =>
+            inTrash ? this.setTrashSort({ dir: opt.dir }) : void this.setSortSetting({ dir: opt.dir }),
+          ),
       );
     }
 
@@ -4566,6 +4596,20 @@ export class DrivePanelView extends ItemView {
     );
 
     menu.showAtMouseEvent(evt);
+  }
+
+  // Trash-view sort changes are session-scoped (never persisted): clearKey returns to the default
+  // "Date trashed" ordering; key overrides it; dir applies to whichever key is active.
+  private setTrashSort(change: { key?: PanelSortKey; clearKey?: boolean; dir?: PanelSortDir }): void {
+    if (change.clearKey) {
+      this.trashSortOverride = null;
+    } else if (change.key) {
+      this.trashSortOverride = change.key;
+    }
+    if (change.dir) {
+      this.trashSortDir = change.dir;
+    }
+    this.refreshListOnly();
   }
 
   private async setSortSetting(change: {

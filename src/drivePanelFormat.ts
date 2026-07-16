@@ -424,10 +424,15 @@ export function friendlyMimeType(mimeType: string): string {
   }
 }
 
-// The Trash view's default order — most recently trashed first, drive.google.com's "Date trashed".
-// trashedTime is not a valid server orderBy key, so this runs client-side. Folders-first (when on)
-// still groups directories; missing/unparsable timestamps sink to the bottom via the name tiebreak.
-export function sortDriveItemsByTrashedTime(items: DriveBrowserItem[], foldersFirst: boolean): DriveBrowserItem[] {
+// The Trash view's default order — "Date trashed", drive.google.com's default (newest first when
+// dir is "desc"). trashedTime is not a valid server orderBy key, so this runs client-side.
+// Folders-first (when on) still groups directories; ties fall back to a numeric-aware name compare.
+export function sortDriveItemsByTrashedTime(
+  items: DriveBrowserItem[],
+  foldersFirst: boolean,
+  dir: PanelSortDir = "desc",
+): DriveBrowserItem[] {
+  const sign = dir === "desc" ? -1 : 1;
   const byName = (a: DriveBrowserItem, b: DriveBrowserItem): number =>
     a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
   return [...items].sort((a, b) => {
@@ -440,7 +445,7 @@ export function sortDriveItemsByTrashedTime(items: DriveBrowserItem[], foldersFi
     }
     const ta = Date.parse(a.trashedTime ?? "") || 0;
     const tb = Date.parse(b.trashedTime ?? "") || 0;
-    return tb - ta || byName(a, b);
+    return (ta - tb) * sign || byName(a, b);
   });
 }
 
