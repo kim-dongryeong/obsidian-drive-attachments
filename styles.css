@@ -2960,6 +2960,10 @@
 
 .gdab-drive-panel-row-detail {
   color: var(--gdab-text-muted, var(--text-muted));
+  /* "3.9 KiB" must never break across lines (kdr QA: the size wrapped when the search path joined
+     the meta line); the path span is the only elastic member of this row. */
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* Search hits: the item's Drive folder path, right-aligned on the SAME meta line (no extra row).
