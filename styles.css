@@ -3166,12 +3166,17 @@
   cursor: default;
 }
 
-/* A Drive-colored folder renders as a solid tinted glyph (drive.google.com parity): fill the Lucide
- * outline with the currentColor the view sets on the icon element. The stroke is the panel
- * background — a thin separation line along the folder's edges (incl. the front flap) so the solid
- * shape doesn't read as a fat blob (kdr QA). */
-.gdab-drive-panel-row-icon.is-folder-colored svg {
+/* A Drive-colored folder renders as a solid tinted glyph (drive.google.com parity). The glyph is
+ * lucide folder-closed: path 1 = the folder silhouette (filled, NO outer stroke — other icons have
+ * none, so an outline would break consistency; kdr QA), path 2 = the inner horizontal line, stroked
+ * in the panel background so the front-flap edge reads without outlining the shape. */
+.gdab-drive-panel-row-icon.is-folder-colored svg path {
   fill: currentColor;
+  stroke: none;
+}
+
+.gdab-drive-panel-row-icon.is-folder-colored svg path + path {
+  fill: none;
   stroke: var(--background-primary);
   stroke-width: 1.25;
 }

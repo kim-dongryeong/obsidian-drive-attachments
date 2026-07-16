@@ -237,6 +237,18 @@ describe("sortDriveItemsByTrashedTime", () => {
     expect(out.map((i) => i.name)).toEqual(["new", "old", "none"]);
   });
 
+  it("My Drive items (no trashedTime — shared-drive-only field) fall back to modifiedTime", () => {
+    const out = sortDriveItemsByTrashedTime(
+      [
+        item({ name: "older", modifiedTime: "2026-02-01T00:00:00Z" }),
+        item({ name: "newer", modifiedTime: "2026-06-01T00:00:00Z" }),
+        item({ name: "shared", trashedTime: "2026-07-01T00:00:00Z", modifiedTime: "2020-01-01T00:00:00Z" }),
+      ],
+      false,
+    );
+    expect(out.map((i) => i.name)).toEqual(["shared", "newer", "older"]);
+  });
+
   it("foldersFirst keeps folders grouped on top", () => {
     const out = sortDriveItemsByTrashedTime(
       [

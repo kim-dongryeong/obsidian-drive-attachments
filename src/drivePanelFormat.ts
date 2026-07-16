@@ -443,9 +443,13 @@ export function sortDriveItemsByTrashedTime(
         return fa ? -1 : 1;
       }
     }
-    const ta = Date.parse(a.trashedTime ?? "") || 0;
-    const tb = Date.parse(b.trashedTime ?? "") || 0;
-    return (ta - tb) * sign || byName(a, b);
+    // Drive v3 populates trashedTime ONLY for shared-drive items — My Drive trash has no trashed
+    // timestamp at all (they'd all tie to 0 and the whole view would fall back to name order).
+    // modifiedTime is the closest available proxy for those, so recently-touched items still
+    // surface first the way drive.google.com's "Date trashed" ordering feels.
+    const stamp = (it: DriveBrowserItem): number =>
+      Date.parse(it.trashedTime ?? "") || Date.parse(it.modifiedTime ?? "") || 0;
+    return (stamp(a) - stamp(b)) * sign || byName(a, b);
   });
 }
 

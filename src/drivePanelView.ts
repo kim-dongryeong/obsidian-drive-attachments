@@ -6,6 +6,7 @@ import {
   Modal,
   Notice,
   prepareFuzzySearch,
+  Scope,
   setIcon,
   TFile,
   WorkspaceLeaf,
@@ -269,6 +270,23 @@ export class DrivePanelView extends ItemView {
     this.fileOps = new DriveFileOpsService(auth);
     this.thumbnails = new DriveThumbnailService(auth);
     this.panelThumbnails = new DrivePanelThumbnails(this.thumbnails, () => this.contentEl);
+    // A view-local keymap scope: active while this leaf has focus, and consulted BEFORE the global
+    // hotkeys — the only reliable way to keep F2 from triggering Obsidian's "rename note title"
+    // (its keymap runs in the capture phase, so a list-level stopPropagation can't beat it).
+    this.scope = new Scope(this.app.scope);
+    this.scope.register([], "F2", () => {
+      const list = this.listEl;
+      if (!list || this.contentEl.ownerDocument.activeElement !== list) {
+        return true; // focus is elsewhere (e.g. the panel's search input) — let the default run
+      }
+      const active = this.getActiveItem();
+      if (!active) {
+        return true;
+      }
+      this.resetTypeAheadBuffer();
+      this.openRenameModal(active);
+      return false; // handled: preventDefault + stop the global hotkey
+    });
     this.data = new DrivePanelDataController(metadata, {
       canBrowse: () => this.canBrowse(),
       currentFolderId: () => this.currentLocation.id,
@@ -1704,7 +1722,9 @@ export class DrivePanelView extends ItemView {
         // drive.google.com renders colored folders as a solid tinted glyph anyway — do the same:
         // replace whatever renderFileIcon drew with a Lucide folder that takes currentColor.
         icon.empty();
-        setIcon(icon, "folder");
+        // folder-closed = folder silhouette + an inner horizontal line; the CSS strokes only that
+        // line in the background color, so the flap edge shows without outlining the whole glyph.
+        setIcon(icon, "folder-closed");
         icon.style.color = color;
         icon.addClass("is-folder-colored");
       }
