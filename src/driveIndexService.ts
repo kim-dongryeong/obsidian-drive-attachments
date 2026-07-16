@@ -511,6 +511,42 @@ export class DriveIndexService {
     this.changePageToken = parseStartPageTokenBody(response);
   }
 
+  // The REAL ancestor chain for a folder (root-most first, the folder itself last), walked through
+  // the folders-only crawl. Lets the panel open a search hit under its true breadcrumb instead of a
+  // fabricated "My Drive / <name>" trail. null when the folder isn't in the index (still loading,
+  // shared drive outside the crawl, or an unresolvable/cyclic parent chain).
+  getFolderAncestry(folderId: string): Array<{ id: string; name: string }> | null {
+    const byId = new Map(this.folderIndex.map((folder) => [folder.id, folder]));
+    for (const item of this.items) {
+      if (item.mimeType === DRIVE_FOLDER_MIME_TYPE && !byId.has(item.id)) {
+        byId.set(item.id, item);
+      }
+    }
+    let current = byId.get(folderId);
+    if (!current) {
+      return null;
+    }
+    const chain: Array<{ id: string; name: string }> = [];
+    const seen = new Set<string>();
+    while (current) {
+      if (seen.has(current.id)) {
+        return null; // cyclic parents — treat as unresolvable
+      }
+      seen.add(current.id);
+      chain.unshift({ id: current.id, name: current.name });
+      const parentId = current.parents?.[0];
+      if (!parentId) {
+        break;
+      }
+      const parent = byId.get(parentId);
+      if (!parent) {
+        break; // reached the (un-indexed) root
+      }
+      current = parent;
+    }
+    return chain;
+  }
+
   private applyChanges(changes: DriveChange[]): void {
     const byId = new Map(this.items.map((item) => [item.id, item]));
     const foldersById = new Map(this.folderIndex.map((folder) => [folder.id, folder]));

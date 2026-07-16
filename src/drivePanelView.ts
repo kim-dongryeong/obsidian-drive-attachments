@@ -108,7 +108,7 @@ import { DriveFileOpsService } from "./driveFileOpsService";
 import { DriveThumbnailService } from "./driveThumbnailService";
 import { DrivePanelThumbnails } from "./drivePanelThumbnails";
 import { DrivePanelDataController } from "./drivePanelDataController";
-import { DrivePanelUploadController } from "./drivePanelUploadController";
+import { DrivePanelUploadController, PanelUploadCardState } from "./drivePanelUploadController";
 import {
   DrivePanelSearchController,
   PanelSearchLocation,
@@ -178,6 +178,7 @@ export class DrivePanelView extends ItemView {
   private addressBarBusy = false;
   private addressBarEditing = false;
   private dropHintEl: HTMLElement | null = null;
+  private uploadCardEl: HTMLElement | null = null;
   // The Drive items being dragged within the panel (a row, or the whole selection). Non-null only
   // during a Drive-internal drag; lets the folder-row handlers route to MOVE/COPY instead of upload.
   private internalDrag: DriveBrowserItem[] | null = null;
@@ -214,6 +215,11 @@ export class DrivePanelView extends ItemView {
   private readonly thumbnails: DriveThumbnailService;
   // View-side lazy-thumbnail machinery (observer/queue/failures) — see drivePanelThumbnails.ts.
   private readonly panelThumbnails: DrivePanelThumbnails;
+  // Search-only sort state (session-scoped): drive.google.com search offers exactly Most relevant
+  // and Date modified (asc/desc) — name/size sorts are meaningless over a relevance-capped partial
+  // result set, so we mirror that. null = Most relevant (the fuzzy-score/merge order).
+  private searchSortByModified = false;
+  private searchSortDir: PanelSortDir = "desc";
   // Trash-only sort state (session-scoped, not persisted): drive.google.com's Trash defaults to
   // "Date trashed" — a key that doesn't exist outside the Trash view, so it can't live in
   // panelSortKey. null = Date trashed; a PanelSortKey overrides it for this view instance.
@@ -277,6 +283,7 @@ export class DrivePanelView extends ItemView {
           this.data.invalidate(targetId);
         }
       },
+      showUploadCard: (state) => this.renderUploadCard(state),
     });
     this.searchCtl = new DrivePanelSearchController(index, search, {
       currentPath: () => this.path,
@@ -400,6 +407,12 @@ export class DrivePanelView extends ItemView {
     }
     const active = mode !== "off" && canDrop;
     this.setPanelDropHighlight(active);
+    if (this.uploadCtl.inFlight) {
+      // The OS shows a no-drop cursor and the drop event never fires, so without this the drag
+      // just silently bounces (kdr QA) — say why while the drag hovers the panel.
+      this.setDropHint("Wait for the current upload to finish before dropping more files.");
+      return;
+    }
     this.setDropHint(active ? `Upload to "${this.currentLocation.name}"` : null);
   }
 
@@ -631,6 +644,39 @@ export class DrivePanelView extends ItemView {
     }
     this.dropHintEl.setText(text);
     this.dropHintEl.addClass("is-visible");
+  }
+
+  // drive.google.com-style in-panel upload progress card (bottom of the panel): target, n/m
+  // progress, the file in flight, and a Cancel button that stops before the next file.
+  private renderUploadCard(state: PanelUploadCardState | null): void {
+    if (!state) {
+      this.uploadCardEl?.remove();
+      this.uploadCardEl = null;
+      return;
+    }
+    if (!this.uploadCardEl || !this.contentEl.contains(this.uploadCardEl)) {
+      this.uploadCardEl?.remove();
+      this.uploadCardEl = this.contentEl.createDiv({ cls: "gdab-drive-panel-upload-card" });
+    }
+    const card = this.uploadCardEl;
+    card.empty();
+    card.createDiv({ cls: "gdab-drive-panel-upload-card-title", text: "Uploading to Google Drive" });
+    card.createDiv({ cls: "gdab-drive-panel-upload-card-target", text: `Target: ${state.targetName}` });
+    card.createDiv({
+      cls: "gdab-drive-panel-upload-card-progress",
+      text: state.currentFile ? `${state.done}/${state.total} · ${state.currentFile}` : `${state.done}/${state.total}`,
+    });
+    const barWrap = card.createDiv({ cls: "gdab-drive-panel-upload-card-bar" });
+    const fill = barWrap.createDiv({ cls: "gdab-drive-panel-upload-card-bar-fill" });
+    fill.style.width = `${state.total > 0 ? Math.round(((state.done - 1) / state.total) * 100) : 0}%`;
+    if (state.cancellable) {
+      const cancel = card.createEl("button", { cls: "gdab-drive-panel-upload-card-cancel", text: "Cancel" });
+      cancel.addEventListener("click", () => {
+        cancel.disabled = true;
+        cancel.setText("Cancelling…");
+        this.uploadCtl.requestCancel();
+      });
+    }
   }
 
   private openPanelDropConfirmModal(
@@ -2043,10 +2089,13 @@ export class DrivePanelView extends ItemView {
     this.searchCtl.exitDriveSearch();
     this.resetTypeAheadBuffer();
     if (fromSearch) {
-      // Open it as a fresh top-level location rather than appending a misleading deep trail onto the
-      // unrelated folder we searched from. (Resolving the hit's TRUE ancestor breadcrumb from the
-      // index's parents/paths lands with the Location-scope chip.)
-      this.path.splice(0, this.path.length, { ...MY_DRIVE_ROOT }, { id: item.id, name: item.name });
+      // Open the hit under its TRUE ancestor breadcrumb, resolved from the index's folders-only
+      // crawl (kdr QA: the fabricated "My Drive / <name>" trail contradicted the detail bar's real
+      // Location and made Open location look wrong). Falls back to the flat trail only when the
+      // index can't resolve the chain (still loading / outside the crawl).
+      const ancestry = this.index.getFolderAncestry(item.id);
+      const segments = ancestry ?? [{ id: item.id, name: item.name }];
+      this.path.splice(0, this.path.length, { ...MY_DRIVE_ROOT }, ...segments.map((seg) => ({ ...seg })));
     } else {
       this.path.push({ id: item.id, name: item.name });
     }
@@ -3400,9 +3449,11 @@ export class DrivePanelView extends ItemView {
     }
     const s = this.getSettings();
     if (this.searchCtl.isDriveSearchActive()) {
-      // Search results stay in relevance order (index fuzzy score first, then server hits), the
-      // way drive.google.com ranks them — the folder-first/name sort would scramble the ranking.
-      return filtered;
+      // drive.google.com search sorts: Most relevant (the fuzzy-score/merge order) or Date
+      // modified — nothing else, because anything alphabetical over a partial result set lies.
+      return this.searchSortByModified
+        ? sortDriveItems(filtered, "modified", this.searchSortDir, false)
+        : filtered;
     }
     if (!this.searchCtl.isDriveSearchActive() && this.isInTrashPath()) {
       // Trash defaults to "Date trashed" (drive.google.com); the Sort menu can override per session.
@@ -3916,6 +3967,49 @@ export class DrivePanelView extends ItemView {
   private openSortMenu(evt: MouseEvent): void {
     const s = this.getSettings();
     const menu = new Menu();
+    if (this.searchCtl.isDriveSearchActive()) {
+      // Search offers exactly drive.google.com's options: Most relevant, or Date modified with a
+      // direction. Name/size sorts over a relevance-capped partial result set would mislead.
+      menu.addItem((mi) => mi.setTitle("Sort by").setIsLabel(true));
+      menu.addItem((mi) =>
+        mi
+          .setTitle("Most relevant")
+          .setIcon("sparkles")
+          .setChecked(!this.searchSortByModified)
+          .onClick(() => {
+            this.searchSortByModified = false;
+            this.refreshListOnly();
+          }),
+      );
+      menu.addItem((mi) =>
+        mi
+          .setTitle("Date modified")
+          .setIcon("clock")
+          .setChecked(this.searchSortByModified)
+          .onClick(() => {
+            this.searchSortByModified = true;
+            this.refreshListOnly();
+          }),
+      );
+      if (this.searchSortByModified) {
+        menu.addSeparator();
+        menu.addItem((mi) => mi.setTitle("Sort direction").setIsLabel(true));
+        for (const opt of sortDirectionOptions("modified")) {
+          menu.addItem((mi) =>
+            mi
+              .setTitle(opt.label)
+              .setIcon(opt.icon)
+              .setChecked(this.searchSortDir === opt.dir)
+              .onClick(() => {
+                this.searchSortDir = opt.dir;
+                this.refreshListOnly();
+              }),
+          );
+        }
+      }
+      menu.showAtMouseEvent(evt);
+      return;
+    }
     const inTrash = this.isInTrashPath();
     const checkedKey: PanelSortKey | null = inTrash ? this.trashSortOverride : s.panelSortKey;
 
@@ -3923,20 +4017,16 @@ export class DrivePanelView extends ItemView {
     if (inTrash) {
       // Trash-only key, checked by default — drive.google.com's Trash sorts by trashed date.
       menu.addItem((mi) => {
-        // Honest labelling: Drive's API gives a real trashedTime only for shared-drive items, so
-        // My Drive trash approximates with the modified date — say so instead of pretending.
-        const title = createFragment((frag) => {
-          frag.createDiv({ text: "Date trashed" });
-          frag.createDiv({
-            cls: "gdab-menu-item-note",
-            text: "My Drive items: by modified date (Drive API limit)",
-          });
-        });
         mi
-          .setTitle(title)
+          .setTitle("Date trashed")
           .setIcon("trash-2")
           .setChecked(this.trashSortOverride === null)
           .onClick(() => this.setTrashSort({ clearKey: true }));
+        // Honest labelling, as a hover tooltip: Drive's API gives a real trashedTime only for
+        // shared-drive items, so My Drive trash approximates with the modified date. (A fragment
+        // title renders flattened into one line inside Menu, so a tooltip is the reliable spot.)
+        const dom = (mi as unknown as { dom?: HTMLElement }).dom;
+        dom?.setAttribute("title", "My Drive items sort by modified date — the Drive API only provides a trashed time for shared-drive items.");
       });
     }
     const driveKeys: Array<{ key: PanelSortKey; label: string; icon: string }> = [

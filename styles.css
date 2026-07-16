@@ -3192,10 +3192,60 @@
   mask: var(--gdab-folder-mask) center / contain no-repeat;
 }
 
-/* Second line under a menu item title (e.g. the Trash sort's API-limitation note). */
-.gdab-menu-item-note {
+/* drive.google.com-style in-panel upload progress card, pinned to the panel bottom. */
+.gdab-drive-panel-upload-card {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 30;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--background-secondary);
+  border: 1px solid var(--gdab-divider, var(--background-modifier-border));
+  box-shadow: var(--shadow-s);
   font-size: var(--font-ui-smaller);
+}
+
+.gdab-drive-panel-upload-card-title {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.gdab-drive-panel-upload-card-target,
+.gdab-drive-panel-upload-card-progress {
   color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gdab-drive-panel-upload-card-bar {
+  height: 4px;
+  margin: 6px 0;
+  border-radius: 2px;
+  background: var(--background-modifier-border);
+  overflow: hidden;
+}
+
+.gdab-drive-panel-upload-card-bar-fill {
+  height: 100%;
+  background: var(--interactive-accent);
+  transition: width 200ms ease;
+}
+
+.gdab-drive-panel-upload-card-cancel {
+  font-size: var(--font-ui-smaller);
+  padding: 2px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--gdab-divider, var(--background-modifier-border));
+  background: transparent;
+  color: var(--gdab-text, var(--text-normal));
+  cursor: pointer;
+}
+
+.gdab-drive-panel-upload-card-cancel:hover:not(:disabled) {
+  background: var(--gdab-control-hover, var(--background-modifier-hover));
 }
 
 /* Keyboard cursor parked on the button (arrow-down past the last row) — mirrors a row's is-active

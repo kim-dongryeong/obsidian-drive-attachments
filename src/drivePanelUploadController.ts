@@ -39,6 +39,18 @@ export interface DrivePanelUploadHost {
   // Refresh the upload target's listing: reload when it is the folder on screen, else just
   // invalidate its cache so the next visit refetches.
   refreshTargetFolder(targetId: string): Promise<void>;
+  // Show/update the in-panel upload progress card (drive.google.com-style). null hides it.
+  showUploadCard(state: PanelUploadCardState | null): void;
+}
+
+// What the in-panel upload card renders: the target, overall progress, the file in flight, and
+// whether Cancel is still meaningful.
+export interface PanelUploadCardState {
+  targetName: string;
+  done: number;
+  total: number;
+  currentFile: string | null;
+  cancellable: boolean;
 }
 
 // The Drive panel's drag-and-drop upload workflow: the drop router (off/confirm/direct), the flat
@@ -50,6 +62,8 @@ export class DrivePanelUploadController {
   // One in-flight guard for panel drop uploads, separate from rename/trash writes, so a second
   // drop can't interleave with an upload (and its follow-up reload) already running.
   inFlight = false;
+  // Set by the card's Cancel button; the upload loops check it between files and stop early.
+  private cancelRequested = false;
 
   constructor(
     private readonly upload: DriveUploadService,
@@ -151,8 +165,13 @@ export class DrivePanelUploadController {
     return true;
   }
 
-  private setUploadPill(done: number, total: number, targetName: string): void {
-    this.host.setDropHint(`Uploading ${done}/${total} → "${targetName}"`);
+  // The card's Cancel button: stop before the next file (the file currently uploading finishes).
+  requestCancel(): void {
+    this.cancelRequested = true;
+  }
+
+  private setUploadPill(done: number, total: number, targetName: string, currentFile: string | null): void {
+    this.host.showUploadCard({ targetName, done, total, currentFile, cancellable: true });
   }
 
   // Public: the toolbar "Upload files..." picker reuses this flat path for manually chosen files.
@@ -162,6 +181,7 @@ export class DrivePanelUploadController {
     skippedJunk: number,
   ): Promise<void> {
     this.inFlight = true;
+    this.cancelRequested = false;
     this.host.setUploadingUi(true);
 
     const stats: PanelDropUploadStats = {
@@ -172,11 +192,16 @@ export class DrivePanelUploadController {
       failedNames: [],
     };
     const progress = new Notice(formatPanelUploadProgress(0, files.length, target.name, stats), 0);
+    let cancelled = false;
 
     try {
       for (let index = 0; index < files.length; index += 1) {
+        if (this.cancelRequested) {
+          cancelled = true;
+          break;
+        }
         const file = files[index];
-        this.setUploadPill(index + 1, files.length, target.name);
+        this.setUploadPill(index + 1, files.length, target.name, file.name);
         progress.setMessage(formatPanelUploadProgress(index + 1, files.length, target.name, stats, file.name));
 
         try {
@@ -212,10 +237,12 @@ export class DrivePanelUploadController {
       progress.hide();
       this.inFlight = false;
       this.host.setUploadingUi(false);
+      this.host.showUploadCard(null);
       this.host.setDropHint(null);
     }
 
-    new Notice(formatPanelUploadSummary(target.name, stats), stats.failed > 0 ? 10_000 : 5_000);
+    const summary = formatPanelUploadSummary(target.name, stats);
+    new Notice(cancelled ? `Upload cancelled. ${summary}` : summary, stats.failed > 0 ? 10_000 : 5_000);
   }
 
   // Folder drop (Phase B): recreate the dropped directory tree under `target`, then upload each file
@@ -224,10 +251,12 @@ export class DrivePanelUploadController {
   // (and Drive folder creation isn't deduped either, so a re-drop already yields a fresh copy).
   private async uploadPanelDroppedTree(entries: FileSystemEntry[], target: DrivePanelLocation): Promise<void> {
     this.inFlight = true;
+    this.cancelRequested = false;
     this.host.setUploadingUi(true);
 
     const progress = new Notice(`Reading dropped folder for ${target.name}…`, 0);
     this.host.setDropHint(`Reading "${target.name}"…`);
+    let cancelled = false;
     const stats: PanelDropUploadStats = {
       uploaded: 0,
       skippedDuplicates: 0,
@@ -284,9 +313,13 @@ export class DrivePanelUploadController {
 
       const total = plan.files.length;
       for (let index = 0; index < total; index += 1) {
+        if (this.cancelRequested) {
+          cancelled = true;
+          break;
+        }
         const { file, dir } = plan.files[index];
         const displayPath = dir.length > 0 ? `${dir.join("/")}/${file.name}` : file.name;
-        this.setUploadPill(index + 1, total, target.name);
+        this.setUploadPill(index + 1, total, target.name, displayPath);
         progress.setMessage(formatTreeUploadProgress(index + 1, total, target.name, displayPath, foldersCreated, stats));
 
         try {
@@ -311,10 +344,14 @@ export class DrivePanelUploadController {
       await this.host.refreshTargetFolder(target.id);
 
       summary = formatTreeUploadSummary(target.name, foldersCreated, stats);
+      if (cancelled) {
+        summary = `Upload cancelled. ${summary}`;
+      }
     } finally {
       progress.hide();
       this.inFlight = false;
       this.host.setUploadingUi(false);
+      this.host.showUploadCard(null);
       this.host.setDropHint(null);
       if (summary) {
         new Notice(summary, stats.failed > 0 ? 10_000 : 5_000);

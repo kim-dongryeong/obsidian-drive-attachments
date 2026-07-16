@@ -247,7 +247,7 @@ export const DEFAULT_SETTINGS: GoogleDriveAttachmentBridgeSettings = {
   showServerOnlySearchCommand: false,
   enableFullDriveAccess: false,
   pastedImageDestination: "ask",
-  panelDropUpload: "confirm",
+  panelDropUpload: "direct",  // drive.google.com uploads immediately; the panel shows an in-panel progress card with Cancel
   panelRowClick: "select",
   panelOpenFolder: "double",
   panelDragOut: "embed",
