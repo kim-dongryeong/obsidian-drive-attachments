@@ -16,11 +16,9 @@ import { DriveAuthService } from "./driveAuthService";
 import { DriveIndexItem, DriveIndexService } from "./driveIndexService";
 import {
   DriveBrowserItem,
-  DriveBrowserPage,
   DriveMetadata,
   DriveMetadataService,
   DriveOwner,
-  SharedDriveRoot,
 } from "./driveMetadataService";
 import { DrivePreviewService } from "./drivePreviewService";
 import {
@@ -52,7 +50,6 @@ import {
   sortDirectionOptions,
   sortDriveItems,
   sortDriveItemsByTrashedTime,
-  sortFolderFirst,
 } from "./drivePanelFormat";
 import {
   captureDropEntries,
@@ -122,6 +119,7 @@ import { DriveUploadService, FileUploadSource } from "./driveUploadService";
 import { DriveFileOpsService } from "./driveFileOpsService";
 import { DriveThumbnailService } from "./driveThumbnailService";
 import { DrivePanelThumbnails } from "./drivePanelThumbnails";
+import { DrivePanelDataController } from "./drivePanelDataController";
 import {
   DrivePanelLocation,
   isVirtualRootId,
@@ -166,21 +164,12 @@ const DRIVE_INTERNAL_DRAG_MIME = "application/x-gdab-drive-items";
 
 export class DrivePanelView extends ItemView {
   private readonly path: DrivePanelLocation[] = [{ ...MY_DRIVE_ROOT }];
-  private readonly folderCache = new Map<string, DriveBrowserItem[]>();
-  // Drive nextPageToken per location id — present only while that listing has more pages to fetch
-  // ("Load more" row shows). Lives beside folderCache and is cleared/invalidated with it.
-  private readonly folderNextPageToken = new Map<string, string>();
-  private loadingMoreFolderId: string | null = null;
+  // Folder listings, pagination tokens, shared-drive roots, and their generation guards — see
+  // drivePanelDataController.ts (T-011 P6). The view reads state and calls load methods on it.
+  private readonly data: DrivePanelDataController;
   // True when the keyboard cursor sits on the "Load more" button (arrow-down past the last row parks
   // it there — revealing the button like a mouse scroll would — instead of auto-fetching the page).
   private loadMoreCursorActive = false;
-  private sharedDriveRoots: SharedDriveRoot[] = [];
-  private rootsLoaded = false;
-  private rootsLoading = false;
-  private loadingFolderId: string | null = null;
-  private errorMessage: string | null = null;
-  private loadGeneration = 0;
-  private rootGeneration = 0;
   private panelDropEventsRegistered = false;
   private panelDropInFlight = false;
   // One in-flight guard for panel Drive-write ops (rename/trash), separate from upload drops, so a
@@ -280,6 +269,18 @@ export class DrivePanelView extends ItemView {
     this.fileOps = new DriveFileOpsService(auth);
     this.thumbnails = new DriveThumbnailService(auth);
     this.panelThumbnails = new DrivePanelThumbnails(this.thumbnails, () => this.contentEl);
+    this.data = new DrivePanelDataController(metadata, {
+      canBrowse: () => this.canBrowse(),
+      currentFolderId: () => this.currentLocation.id,
+      render: () => this.render(),
+      onCannotBrowse: () => this.clearSelection(false),
+      onFolderItemsApplied: (folderId) => this.pruneSelection(this.data.getCached(folderId) ?? []),
+      onFolderLoadSettled: () => this.applyPendingActiveItem(),
+      onForceRefresh: () => this.panelThumbnails.clearFailures(),
+      onLoadMoreStarted: () => {
+        this.loadMoreCursorActive = false;
+      },
+    });
   }
 
   getViewType(): string {
@@ -298,19 +299,17 @@ export class DrivePanelView extends ItemView {
     this.registerPanelDropEvents();
     this.resetHistory();
     this.render();
-    void this.loadRoots(false);
+    void this.data.loadRoots(false);
     void this.ensurePanelIndex().catch(() => undefined);
-    await this.loadCurrentFolder(false);
+    await this.data.loadCurrentFolder(false);
   }
 
   async onClose(): Promise<void> {
     // Abandon any in-flight folder/root load so its late .then can't paint a torn-down view.
-    this.loadGeneration++;
-    this.rootGeneration++;
+    this.data.cancelInFlight();
     this.cancelDriveSearch();
     this.panelIndexPromise = null;
-    this.folderCache.clear();
-    this.folderNextPageToken.clear();
+    this.data.invalidateAll();
     this.clearSelection(false);
     this.resetTypeAheadBuffer();
     this.setPanelDropHighlight(false);
@@ -333,11 +332,11 @@ export class DrivePanelView extends ItemView {
   refreshAvailability(): void {
     this.exitDriveSearch();
     this.panelIndexPromise = null;
-    void this.loadRoots(true);
+    void this.data.loadRoots(true);
     if (this.canBrowse()) {
       void this.ensurePanelIndex().catch(() => undefined);
     }
-    void this.loadCurrentFolder(true);
+    void this.data.loadCurrentFolder(true);
   }
 
   // Theme changes are CSS-only, so settings can repaint an open panel without rebuilding its DOM.
@@ -783,9 +782,9 @@ export class DrivePanelView extends ItemView {
       }
 
       if (this.currentLocation.id === target.id) {
-        await this.loadCurrentFolder(true);
+        await this.data.loadCurrentFolder(true);
       } else {
-        this.folderCache.delete(target.id);
+        this.data.invalidate(target.id);
       }
     } finally {
       progress.hide();
@@ -888,9 +887,9 @@ export class DrivePanelView extends ItemView {
       }
 
       if (this.currentLocation.id === target.id) {
-        await this.loadCurrentFolder(true);
+        await this.data.loadCurrentFolder(true);
       } else {
-        this.folderCache.delete(target.id);
+        this.data.invalidate(target.id);
       }
 
       summary = formatTreeUploadSummary(target.name, foldersCreated, stats);
@@ -924,159 +923,9 @@ export class DrivePanelView extends ItemView {
     return this.path.map((location) => location.name).join(" / ");
   }
 
-  private async loadCurrentFolder(force: boolean): Promise<void> {
-    // Bump the generation up front so any in-flight load is invalidated the moment navigation
-    // (back/breadcrumb/refresh) changes what we're showing — including when we return early via
-    // the cache or scope guards below. Otherwise a slow load that errors after the user has
-    // already navigated away would paint its error onto the now-current folder.
-    const generation = ++this.loadGeneration;
-    if (force) {
-      // A refresh is the explicit retry path for thumbnails that previously failed (offline, stale
-      // link, expired grant). Successful cached thumbnails remain and self-invalidate if their URL changes.
-      this.panelThumbnails.clearFailures();
-    }
-
-    if (!this.canBrowse()) {
-      this.loadingFolderId = null;
-      this.errorMessage = null;
-      this.clearSelection(false);
-      this.render();
-      return;
-    }
-
-    const folderId = this.currentLocation.id;
-    if (!force && this.folderCache.has(folderId)) {
-      this.loadingFolderId = null;
-      this.errorMessage = null;
-      this.pruneSelection(this.folderCache.get(folderId) ?? []);
-      this.applyPendingActiveItem();
-      this.render();
-      return;
-    }
-
-    this.loadingFolderId = folderId;
-    this.errorMessage = null;
-    this.render();
-
-    try {
-      const page = await this.listLocationItemsPage(folderId);
-      if (generation !== this.loadGeneration) {
-        return;
-      }
-      this.folderCache.set(folderId, sortFolderFirst(page.items));
-      this.setNextPageToken(folderId, page.nextPageToken);
-      this.pruneSelection(this.folderCache.get(folderId) ?? []);
-      this.errorMessage = null;
-    } catch (error) {
-      if (generation !== this.loadGeneration) {
-        return;
-      }
-      this.errorMessage = error instanceof Error ? error.message : String(error);
-    } finally {
-      if (generation === this.loadGeneration) {
-        this.loadingFolderId = null;
-        this.applyPendingActiveItem();
-        this.render();
-      }
-    }
-  }
-
-  private setNextPageToken(folderId: string, token: string | undefined): void {
-    // Every listing (Recent included) pages the same way drive.google.com does — its Recent view
-    // is an infinite recency scroll, not a fixed top-N — so a pending token always offers Load more.
-    if (token) {
-      this.folderNextPageToken.set(folderId, token);
-    } else {
-      this.folderNextPageToken.delete(folderId);
-    }
-  }
-
-  // "Load more" — fetch the current listing's next Drive page and append it. Guarded by the same
-  // loadGeneration as loadCurrentFolder, so navigating away (or refreshing) while a page is in
-  // flight discards the stale append instead of splicing it into another folder's list.
-  private async loadMoreCurrentFolder(): Promise<void> {
-    const folderId = this.currentLocation.id;
-    const pageToken = this.folderNextPageToken.get(folderId);
-    if (!pageToken || this.loadingMoreFolderId !== null) {
-      return;
-    }
-
-    const generation = this.loadGeneration;
-    this.loadingMoreFolderId = folderId;
-    this.loadMoreCursorActive = false;
-    this.render();
-
-    try {
-      const page = await this.listLocationItemsPage(folderId, pageToken);
-      if (generation !== this.loadGeneration) {
-        return;
-      }
-      const existing = this.folderCache.get(folderId) ?? [];
-      // Dedup by id: the listing can shift between page fetches (uploads, renames), and Drive may
-      // then re-serve an item the first page already had. Last-write wins keeps the fresher copy.
-      const merged = new Map(existing.map((item) => [item.id, item] as const));
-      for (const item of page.items) {
-        merged.set(item.id, item);
-      }
-      this.folderCache.set(folderId, sortFolderFirst([...merged.values()]));
-      this.setNextPageToken(folderId, page.nextPageToken);
-    } catch (error) {
-      if (generation !== this.loadGeneration) {
-        return;
-      }
-      new Notice(`Load more failed: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      if (generation === this.loadGeneration) {
-        this.loadingMoreFolderId = null;
-        this.render();
-      } else {
-        this.loadingMoreFolderId = null;
-      }
-    }
-  }
-
   private canBrowse(): boolean {
     const settings = this.getSettings();
     return settings.enableDriveSearch && this.auth.hasDriveSearchScope;
-  }
-
-  private async loadRoots(force: boolean): Promise<void> {
-    const generation = ++this.rootGeneration;
-
-    if (!this.canBrowse()) {
-      this.sharedDriveRoots = [];
-      this.rootsLoaded = false;
-      this.rootsLoading = false;
-      this.render();
-      return;
-    }
-
-    if (!force && this.rootsLoaded) {
-      return;
-    }
-
-    this.rootsLoading = true;
-    this.render();
-
-    try {
-      const roots = await this.metadata.listSharedDriveRoots();
-      if (generation !== this.rootGeneration) {
-        return;
-      }
-      this.sharedDriveRoots = roots;
-      this.rootsLoaded = true;
-    } catch {
-      if (generation !== this.rootGeneration) {
-        return;
-      }
-      this.sharedDriveRoots = [];
-      this.rootsLoaded = true;
-    } finally {
-      if (generation === this.rootGeneration) {
-        this.rootsLoading = false;
-        this.render();
-      }
-    }
   }
 
   private render(): void {
@@ -1180,8 +1029,8 @@ export class DrivePanelView extends ItemView {
     // which a long listing never shows without scrolling to the very bottom (kdr QA).
     iconButton("folder-plus", "New folder", this.isCurrentVirtualRoot(), () => this.openNewFolderModal());
     iconButton("refresh-cw", "Refresh", false, () => {
-      void this.loadRoots(true);
-      void this.loadCurrentFolder(true);
+      void this.data.loadRoots(true);
+      void this.data.loadCurrentFolder(true);
     });
   }
 
@@ -1209,8 +1058,8 @@ export class DrivePanelView extends ItemView {
     empty.createEl("button", { text: this.auth.isConnected ? "Reconnect" : "Connect" }).addEventListener("click", () => {
       this.connect()
         .then(() => {
-          void this.loadRoots(true);
-          return this.loadCurrentFolder(true);
+          void this.data.loadRoots(true);
+          return this.data.loadCurrentFolder(true);
         })
         .catch((error) => {
           new Notice(`Google Drive connection failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -1298,7 +1147,7 @@ export class DrivePanelView extends ItemView {
         this.path.splice(index + 1);
         this.pushHistory();
         this.clearSelection(false);
-        void this.loadCurrentFolder(false);
+        void this.data.loadCurrentFolder(false);
       };
       segment.addEventListener("click", navigate);
       segment.addEventListener("keydown", (evt) => {
@@ -1338,7 +1187,7 @@ export class DrivePanelView extends ItemView {
 
     const requestedPath = this.snapshotPath();
     try {
-      const items = await this.getBreadcrumbFolderItems(parent.id);
+      const items = await this.data.getBreadcrumbFolderItems(parent.id);
       if (!samePathIds(this.path, requestedPath)) {
         return;
       }
@@ -1416,7 +1265,7 @@ export class DrivePanelView extends ItemView {
   private addRootBreadcrumbMenuItems(menu: Menu): void {
     const groups: DrivePanelLocation[][] = [
       [{ ...MY_DRIVE_ROOT }],
-      this.sharedDriveRoots.map((root) => ({ id: root.id, name: root.name })),
+      this.data.sharedDriveRoots.map((root) => ({ id: root.id, name: root.name })),
       [{ ...SHARED_WITH_ME_ROOT }, { ...RECENT_ROOT }, { ...STARRED_ROOT }],
       [{ ...TRASH_ROOT }],
     ];
@@ -1441,7 +1290,7 @@ export class DrivePanelView extends ItemView {
         );
       }
     }
-    if (this.rootsLoading) {
+    if (this.data.rootsLoading) {
       menu.addSeparator();
       menu.addItem((mi) => mi.setTitle("Shared drives loading...").setIcon("loader").setDisabled(true));
     }
@@ -1455,7 +1304,7 @@ export class DrivePanelView extends ItemView {
         { ...STARRED_ROOT },
         { ...RECENT_ROOT },
         { ...TRASH_ROOT },
-        ...this.sharedDriveRoots.map((root) => ({ id: root.id, name: root.name })),
+        ...this.data.sharedDriveRoots.map((root) => ({ id: root.id, name: root.name })),
       ];
     }
 
@@ -1464,23 +1313,10 @@ export class DrivePanelView extends ItemView {
       return [];
     }
 
-    const items = await this.getBreadcrumbFolderItems(parent.id);
+    const items = await this.data.getBreadcrumbFolderItems(parent.id);
     return items
       .filter((item) => item.mimeType === DRIVE_FOLDER_MIME_TYPE)
       .map((item) => ({ id: item.id, name: item.name }));
-  }
-
-  private async getBreadcrumbFolderItems(folderId: string): Promise<DriveBrowserItem[]> {
-    const cached = this.folderCache.get(folderId);
-    if (cached !== undefined) {
-      return cached;
-    }
-
-    const page = await this.listLocationItemsPage(folderId);
-    const items = sortFolderFirst(page.items);
-    this.folderCache.set(folderId, items);
-    this.setNextPageToken(folderId, page.nextPageToken);
-    return items;
   }
 
   private navigateToBreadcrumbSibling(index: number, location: DrivePanelLocation): void {
@@ -1497,11 +1333,10 @@ export class DrivePanelView extends ItemView {
     this.path.splice(0, this.path.length, ...nextPath);
     this.pushHistory();
     if (index === 0 && previousRootId !== location.id) {
-      this.folderCache.clear();
-      this.folderNextPageToken.clear();
+      this.data.invalidateAll();
     }
     this.clearSelection(false);
-    void this.loadCurrentFolder(false);
+    void this.data.loadCurrentFolder(false);
   }
 
   private startAddressBarEdit(): void {
@@ -1614,7 +1449,7 @@ export class DrivePanelView extends ItemView {
       const resolved: DrivePanelLocation[] = [{ ...root }];
       let parentId = root.id;
       for (let depth = 1; depth < segments.length; depth += 1) {
-        const items = await this.getBreadcrumbFolderItems(parentId);
+        const items = await this.data.getBreadcrumbFolderItems(parentId);
         const match = pickFolderByName(items, segments[depth]);
         if (!match) {
           new Notice(`Folder not found: “${segments[depth]}”.`);
@@ -1638,12 +1473,11 @@ export class DrivePanelView extends ItemView {
       this.path.splice(0, this.path.length, ...resolved);
       this.pushHistory();
       if (previousRootId !== resolved[0].id) {
-        this.folderCache.clear();
-        this.folderNextPageToken.clear();
+        this.data.invalidateAll();
       }
       this.clearSelection(false);
       this.addressBarEditing = false;
-      void this.loadCurrentFolder(false);
+      void this.data.loadCurrentFolder(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       new Notice(`Could not resolve that path: ${message}`);
@@ -1724,12 +1558,12 @@ export class DrivePanelView extends ItemView {
       return;
     }
 
-    if (this.loadingFolderId === folderId) {
+    if (this.data.loadingFolderId === folderId) {
       this.renderLoadingSkeleton(list);
       return;
     }
 
-    if (this.errorMessage) {
+    if (this.data.errorMessage) {
       const error = list.createDiv({
         cls: "gdab-drive-panel-state is-entering",
         attr: { role: "alert" },
@@ -1738,14 +1572,14 @@ export class DrivePanelView extends ItemView {
         cls: "gdab-drive-panel-state-title",
         text: this.isCurrentVirtualRoot() ? `Could not load ${this.currentVirtualRootName()}.` : "Could not load this Drive folder.",
       });
-      error.createDiv({ cls: "gdab-drive-panel-state-detail", text: this.errorMessage });
+      error.createDiv({ cls: "gdab-drive-panel-state-detail", text: this.data.errorMessage });
       error.createEl("button", { text: "Retry" }).addEventListener("click", () => {
-        void this.loadCurrentFolder(true);
+        void this.data.loadCurrentFolder(true);
       });
       return;
     }
 
-    const rawItems = this.folderCache.get(folderId) ?? [];
+    const rawItems = this.data.getCached(folderId) ?? [];
     this.populateRows(list, rawItems, true);
     this.renderLoadMoreRow(list, folderId);
     if (rawItems.length > 0) {
@@ -1758,10 +1592,10 @@ export class DrivePanelView extends ItemView {
   // append a "Load more" row under the item rows so the tail of large folders stays reachable
   // (without it, item 201+ would silently not exist as far as the panel shows).
   private renderLoadMoreRow(list: HTMLElement, folderId: string): void {
-    if (!this.folderNextPageToken.has(folderId)) {
+    if (!this.data.hasMorePages(folderId)) {
       return;
     }
-    const isLoading = this.loadingMoreFolderId === folderId;
+    const isLoading = this.data.loadingMoreFolderId === folderId;
     const row = list.createDiv({ cls: "gdab-drive-panel-load-more" });
     const button = row.createEl("button", {
       cls: "gdab-drive-panel-load-more-button",
@@ -1770,7 +1604,7 @@ export class DrivePanelView extends ItemView {
     button.disabled = isLoading;
     button.addEventListener("click", (evt) => {
       evt.stopPropagation();
-      void this.loadMoreCurrentFolder();
+      void this.data.loadMoreCurrentFolder();
     });
   }
 
@@ -2065,7 +1899,7 @@ export class DrivePanelView extends ItemView {
         evt.preventDefault();
         if (this.loadMoreCursorActive) {
           // Cursor already parked on Load more → a second arrow-down fetches the next page.
-          void this.loadMoreCurrentFolder();
+          void this.data.loadMoreCurrentFolder();
           return;
         }
         // At the last item with more pages pending, arrow-down reveals + parks the cursor on the
@@ -2124,7 +1958,7 @@ export class DrivePanelView extends ItemView {
       case "Enter":
         evt.preventDefault();
         if (this.loadMoreCursorActive) {
-          void this.loadMoreCurrentFolder();
+          void this.data.loadMoreCurrentFolder();
           return;
         }
         this.activateActiveItem();
@@ -2282,10 +2116,10 @@ export class DrivePanelView extends ItemView {
   // keyboard should reveal it too. A second arrow-down (or Enter) on the button then fetches the page.
   // Returns true when the key was consumed here.
   private tryFocusLoadMore(): boolean {
-    if (this.isDriveSearchActive() || this.loadingMoreFolderId !== null) {
+    if (this.isDriveSearchActive() || this.data.loadingMoreFolderId !== null) {
       return false;
     }
-    if (!this.folderNextPageToken.has(this.currentLocation.id)) {
+    if (!this.data.hasMorePages(this.currentLocation.id)) {
       return false;
     }
     const items = this.getCurrentItems();
@@ -2419,7 +2253,7 @@ export class DrivePanelView extends ItemView {
     this.pushHistory();
     this.clearSelection(false);
     this.pendingActiveItemId = exitedFolderId;
-    void this.loadCurrentFolder(false);
+    void this.data.loadCurrentFolder(false);
   }
 
   // Consume pendingActiveItemId (set by navigateUp): if that folder is in the freshly-loaded list,
@@ -2465,7 +2299,7 @@ export class DrivePanelView extends ItemView {
     }
     this.pushHistory();
     this.clearSelection(false);
-    void this.loadCurrentFolder(false);
+    void this.data.loadCurrentFolder(false);
   }
 
   // "Open location" for a search result: open the folder the item lives in (its parent) and put the
@@ -2543,7 +2377,7 @@ export class DrivePanelView extends ItemView {
     this.resetTypeAheadBuffer();
     this.path.splice(0, this.path.length, ...entry.map((location) => ({ ...location })));
     this.clearSelection(false);
-    void this.loadCurrentFolder(false);
+    void this.data.loadCurrentFolder(false);
   }
 
   private openPanelItemMenu(evt: MouseEvent, item: DriveBrowserItem): void {
@@ -2742,8 +2576,8 @@ export class DrivePanelView extends ItemView {
     }
     menu.addItem((mi) =>
       mi.setTitle("Refresh").setIcon("refresh-cw").onClick(() => {
-        void this.loadRoots(true);
-        void this.loadCurrentFolder(true);
+        void this.data.loadRoots(true);
+        void this.data.loadCurrentFolder(true);
       }),
     );
 
@@ -2831,13 +2665,13 @@ export class DrivePanelView extends ItemView {
     const target = { ...this.currentLocation };
     try {
       const folderId = await this.upload.createFolder(name, target.id);
-      this.folderCache.delete(target.id);
+      this.data.invalidate(target.id);
       this.selectedItemIds.clear();
       this.selectedItemIds.add(folderId);
       this.selectionAnchorId = folderId;
       // Same post-modal focus restore as rename: cursor on the new folder, keyboard back in the list.
       this.pendingActiveItemId = folderId;
-      await this.loadCurrentFolder(true);
+      await this.data.loadCurrentFolder(true);
       this.listEl?.focus();
       new Notice(`Created Drive folder: ${name}`);
     } catch (error) {
@@ -2949,7 +2783,7 @@ export class DrivePanelView extends ItemView {
   private folderPickerRoots(): DrivePanelLocation[] {
     return [
       { ...MY_DRIVE_ROOT },
-      ...this.sharedDriveRoots.map((root) => ({ id: root.id, name: root.name })),
+      ...this.data.sharedDriveRoots.map((root) => ({ id: root.id, name: root.name })),
     ];
   }
 
@@ -3000,7 +2834,7 @@ export class DrivePanelView extends ItemView {
   private updateCachedFolderColor(item: DriveBrowserItem, color: string | null): void {
     const normalized = folderColorHex(color ?? undefined) ?? undefined;
     item.folderColorRgb = normalized;
-    for (const items of this.folderCache.values()) {
+    for (const items of this.data.cachedLists()) {
       const cached = items.find((candidate) => candidate.id === item.id);
       if (cached) {
         cached.folderColorRgb = normalized;
@@ -3033,7 +2867,7 @@ export class DrivePanelView extends ItemView {
         }
       }
       if (this.isCurrentVirtualRoot()) {
-        await this.loadCurrentFolder(true);
+        await this.data.loadCurrentFolder(true);
       } else {
         this.render();
       }
@@ -3046,7 +2880,7 @@ export class DrivePanelView extends ItemView {
   }
 
   private updateCachedStarred(fileId: string, starred: boolean): void {
-    for (const items of this.folderCache.values()) {
+    for (const items of this.data.cachedLists()) {
       const cached = items.find((candidate) => candidate.id === fileId);
       if (cached) {
         cached.starred = starred;
@@ -3055,7 +2889,7 @@ export class DrivePanelView extends ItemView {
     // Starred is query-backed rather than a parent listing. Invalidate it after either transition;
     // when it is active, setItemsStarred() immediately refetches the authoritative result. (Recent
     // membership is unaffected by starring, so it needs no invalidation here.)
-    this.folderCache.delete(STARRED_ROOT.id);
+    this.data.invalidate(STARRED_ROOT.id);
   }
 
   private async renameItem(item: DriveBrowserItem, name: string): Promise<void> {
@@ -3078,7 +2912,7 @@ export class DrivePanelView extends ItemView {
       // The modal stole DOM focus and the reload rebuilds the rows, so re-anchor the keyboard
       // cursor on the renamed item and give focus back to the list (kdr QA: arrows went dead).
       this.pendingActiveItemId = item.id;
-      await this.loadCurrentFolder(true);
+      await this.data.loadCurrentFolder(true);
       this.listEl?.focus();
     } catch (error) {
       new Notice(`Rename failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -3125,10 +2959,10 @@ export class DrivePanelView extends ItemView {
         }
       }
 
-      this.folderCache.delete(source.id);
-      this.folderCache.delete(target.id);
+      this.data.invalidate(source.id);
+      this.data.invalidate(target.id);
       if (this.currentLocation.id === source.id || this.currentLocation.id === target.id) {
-        await this.loadCurrentFolder(true);
+        await this.data.loadCurrentFolder(true);
       } else {
         this.render();
       }
@@ -3167,14 +3001,14 @@ export class DrivePanelView extends ItemView {
         }
       }
 
-      this.folderCache.delete(target.id);
+      this.data.invalidate(target.id);
       if (this.currentLocation.id === target.id) {
         this.selectedItemIds.clear();
         for (const copiedId of copiedIds) {
           this.selectedItemIds.add(copiedId);
         }
         this.selectionAnchorId = copiedIds[0] ?? null;
-        await this.loadCurrentFolder(true);
+        await this.data.loadCurrentFolder(true);
       } else {
         this.render();
       }
@@ -3273,7 +3107,7 @@ export class DrivePanelView extends ItemView {
           console.warn("[Drive Attachments] Drive panel trash failed.", error);
         }
       }
-      await this.loadCurrentFolder(true);
+      await this.data.loadCurrentFolder(true);
     } finally {
       progress.hide();
       this.panelWriteInFlight = false;
@@ -3610,9 +3444,9 @@ export class DrivePanelView extends ItemView {
           console.warn("[Drive Attachments] Drive panel restore failed.", error);
         }
       }
-      this.folderCache.delete(STARRED_ROOT.id);
-      this.folderCache.delete(RECENT_ROOT.id);
-      await this.loadCurrentFolder(true);
+      this.data.invalidate(STARRED_ROOT.id);
+      this.data.invalidate(RECENT_ROOT.id);
+      await this.data.loadCurrentFolder(true);
     } finally {
       progress.hide();
       this.panelWriteInFlight = false;
@@ -3652,9 +3486,9 @@ export class DrivePanelView extends ItemView {
           console.warn("[Drive Attachments] Drive panel permanent delete failed.", error);
         }
       }
-      this.folderCache.delete(STARRED_ROOT.id);
-      this.folderCache.delete(RECENT_ROOT.id);
-      await this.loadCurrentFolder(true);
+      this.data.invalidate(STARRED_ROOT.id);
+      this.data.invalidate(RECENT_ROOT.id);
+      await this.data.loadCurrentFolder(true);
     } finally {
       progress.hide();
       this.panelWriteInFlight = false;
@@ -3790,7 +3624,7 @@ export class DrivePanelView extends ItemView {
   private getCurrentRawItems(): DriveBrowserItem[] {
     return this.isDriveSearchActive()
       ? this.getDriveSearchItems()
-      : (this.folderCache.get(this.currentLocation.id) ?? []);
+      : (this.data.getCached(this.currentLocation.id) ?? []);
   }
 
   // Apply the Drive-style chips then sort the active folder/search result set. The name query is
@@ -3891,7 +3725,7 @@ export class DrivePanelView extends ItemView {
       return;
     }
 
-    this.populateRows(list, this.folderCache.get(this.currentLocation.id) ?? [], false);
+    this.populateRows(list, this.data.getCached(this.currentLocation.id) ?? [], false);
   }
 
   // A selection/cursor move changes WHICH rows are selected/active, not which rows exist. A full
@@ -4720,22 +4554,6 @@ export class DrivePanelView extends ItemView {
   // Route a virtual collection root to its query-backed service call; a real
   // Drive folder id falls through to the normal parent listing. One page per call —
   // pass the previous page's nextPageToken to continue the same listing.
-  private listLocationItemsPage(folderId: string, pageToken?: string): Promise<DriveBrowserPage> {
-    if (folderId === SHARED_WITH_ME_ROOT.id) {
-      return this.metadata.listSharedWithMePage(pageToken);
-    }
-    if (folderId === RECENT_ROOT.id) {
-      return this.metadata.listRecentPage(pageToken);
-    }
-    if (folderId === STARRED_ROOT.id) {
-      return this.metadata.listStarredPage(pageToken);
-    }
-    if (folderId === TRASH_ROOT.id) {
-      return this.metadata.listTrashedPage(pageToken);
-    }
-    return this.metadata.listFolderPage(folderId, pageToken);
-  }
-
   private isCurrentVirtualRoot(): boolean {
     return this.path.length === 1 && isVirtualRootId(this.currentLocation.id);
   }
