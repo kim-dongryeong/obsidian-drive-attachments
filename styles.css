@@ -15,7 +15,7 @@
 .gdab-drive-search-result {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 6px;
 }
 
 .gdab-drive-search-result-main {
@@ -135,18 +135,18 @@
   flex: 0 0 auto;
 }
 
-/* Type icon shown next to the file name (not the type label): fixed 16px so bundled-theme SVGs and
-   custom-pack <img> icons line up identically, nudged to sit on the name's text line. */
+/* Type icon shown next to the file name (not the type label): fixed 20px (Finder/Drive list size) so
+   bundled-theme SVGs and custom-pack <img> icons line up identically, nudged to sit on the name line. */
 .gdab-drive-search-result-name-icon {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   margin-top: 1px;
 }
 
 .gdab-drive-search-result-name-icon svg,
 .gdab-drive-search-result-name-icon .gdab-custom-file-icon-img {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
 }
 
 .gdab-drive-search-result-icon svg {
@@ -3164,6 +3164,15 @@
 .gdab-drive-panel-load-more-button:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* Keyboard cursor parked on the button (arrow-down past the last row) — mirrors a row's is-active
+ * highlight so it reads as "the cursor is here; press Enter / ↓ again to load". */
+.gdab-drive-panel-load-more-button.is-cursor {
+  color: var(--gdab-text, var(--text-normal));
+  background: var(--gdab-control-hover, var(--background-modifier-hover));
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 1px var(--interactive-accent);
 }
 
 /*

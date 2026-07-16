@@ -216,6 +216,9 @@ export class DrivePanelView extends ItemView {
   // ("Load more" row shows). Lives beside folderCache and is cleared/invalidated with it.
   private readonly folderNextPageToken = new Map<string, string>();
   private loadingMoreFolderId: string | null = null;
+  // True when the keyboard cursor sits on the "Load more" button (arrow-down past the last row parks
+  // it there — revealing the button like a mouse scroll would — instead of auto-fetching the page).
+  private loadMoreCursorActive = false;
   private sharedDriveRoots: SharedDriveRoot[] = [];
   private rootsLoaded = false;
   private rootsLoading = false;
@@ -1024,9 +1027,9 @@ export class DrivePanelView extends ItemView {
   }
 
   private setNextPageToken(folderId: string, token: string | undefined): void {
-    // Recent is a bounded "recently touched" view (the 200 most-recent), not a full-Drive browse —
-    // never offer Load more there, or it would page the entire Drive by recency and never end.
-    if (token && folderId !== RECENT_ROOT.id) {
+    // Every listing (Recent included) pages the same way drive.google.com does — its Recent view
+    // is an infinite recency scroll, not a fixed top-N — so a pending token always offers Load more.
+    if (token) {
       this.folderNextPageToken.set(folderId, token);
     } else {
       this.folderNextPageToken.delete(folderId);
@@ -1045,6 +1048,7 @@ export class DrivePanelView extends ItemView {
 
     const generation = this.loadGeneration;
     this.loadingMoreFolderId = folderId;
+    this.loadMoreCursorActive = false;
     this.render();
 
     try {
@@ -1122,6 +1126,9 @@ export class DrivePanelView extends ItemView {
 
   private render(): void {
     const { contentEl } = this;
+    // A full rebuild recreates the Load more button fresh (no cursor highlight), so drop the parked
+    // state to match — an arrow-down re-parks it if the cursor is still on the last row.
+    this.loadMoreCursorActive = false;
     // render() rebuilds the whole panel on every selection change, which would otherwise drop the
     // list's keyboard focus and reset its scroll. Capture both first, then restore onto the fresh
     // list so arrow-key navigation survives re-renders and the view doesn't jump to the top.
@@ -2063,9 +2070,14 @@ export class DrivePanelView extends ItemView {
     switch (evt.key) {
       case "ArrowDown":
         evt.preventDefault();
-        // At the last item with more pages pending, arrow-down pulls the next page (keyboard parity
-        // with the mouse-only "Load more" row) rather than dead-ending at the bottom.
-        if (this.tryLoadMoreAtBottom()) {
+        if (this.loadMoreCursorActive) {
+          // Cursor already parked on Load more → a second arrow-down fetches the next page.
+          void this.loadMoreCurrentFolder();
+          return;
+        }
+        // At the last item with more pages pending, arrow-down reveals + parks the cursor on the
+        // "Load more" button rather than dead-ending at the bottom (or auto-loading).
+        if (this.tryFocusLoadMore()) {
           return;
         }
         this.moveActiveCursor(this.verticalStep(), evt.shiftKey);
@@ -2088,6 +2100,11 @@ export class DrivePanelView extends ItemView {
         return;
       case "ArrowUp":
         evt.preventDefault();
+        if (this.loadMoreCursorActive) {
+          // Step back off the Load more button onto the last row.
+          this.setLoadMoreCursor(false);
+          return;
+        }
         if (evt.metaKey || evt.ctrlKey) {
           // Cmd/Ctrl-↑ goes up a level (Finder/Explorer), mirroring Backspace and the Back button.
           this.navigateUp();
@@ -2113,6 +2130,10 @@ export class DrivePanelView extends ItemView {
         return;
       case "Enter":
         evt.preventDefault();
+        if (this.loadMoreCursorActive) {
+          void this.loadMoreCurrentFolder();
+          return;
+        }
         this.activateActiveItem();
         return;
       case "Delete":
@@ -2263,21 +2284,47 @@ export class DrivePanelView extends ItemView {
     return visibleRows * columns;
   }
 
-  // When the cursor is on the last item and the listing has another Drive page, fetch it (keyboard
-  // equivalent of clicking "Load more"). Returns true if it kicked off a load.
-  private tryLoadMoreAtBottom(): boolean {
+  // Arrow-down past the last row: park the cursor ON the "Load more" button (scroll it into view +
+  // highlight) instead of auto-fetching — a mouse user scrolls a hair to reveal that button, so the
+  // keyboard should reveal it too. A second arrow-down (or Enter) on the button then fetches the page.
+  // Returns true when the key was consumed here.
+  private tryFocusLoadMore(): boolean {
     if (this.isDriveSearchActive() || this.loadingMoreFolderId !== null) {
+      return false;
+    }
+    if (!this.folderNextPageToken.has(this.currentLocation.id)) {
       return false;
     }
     const items = this.getCurrentItems();
     if (items.length === 0 || this.activeItemId !== items[items.length - 1].id) {
       return false;
     }
-    if (!this.folderNextPageToken.has(this.currentLocation.id)) {
+    if (!this.loadMoreButtonEl()) {
       return false;
     }
-    void this.loadMoreCurrentFolder();
+    this.setLoadMoreCursor(true);
     return true;
+  }
+
+  private loadMoreButtonEl(): HTMLElement | null {
+    return this.listEl?.querySelector<HTMLElement>(".gdab-drive-panel-load-more-button") ?? null;
+  }
+
+  // Move the visible keyboard cursor onto (true) or off (false) the Load more button. On: drop the row
+  // highlight and reveal the button. Off: restore the active row's highlight (activeItemId is unchanged).
+  private setLoadMoreCursor(active: boolean): void {
+    this.loadMoreCursorActive = active;
+    const button = this.loadMoreButtonEl();
+    if (active) {
+      this.listEl
+        ?.querySelectorAll<HTMLElement>(".gdab-drive-panel-row.is-active")
+        .forEach((row) => row.removeClass("is-active"));
+      button?.addClass("is-cursor");
+      button?.scrollIntoView({ block: "nearest" });
+    } else {
+      button?.removeClass("is-cursor");
+      this.refreshSelectionOnly(true);
+    }
   }
 
   // Vertical arrow step: one item in the single-column list/compact views, a full row (the live
@@ -3612,6 +3659,7 @@ export class DrivePanelView extends ItemView {
   }
 
   private selectOnly(itemId: string, render: boolean): void {
+    this.loadMoreCursorActive = false;
     this.selectedItemIds.clear();
     this.selectedItemIds.add(itemId);
     this.selectionAnchorId = itemId;
@@ -3622,6 +3670,7 @@ export class DrivePanelView extends ItemView {
   }
 
   private toggleSelection(itemId: string, render: boolean): void {
+    this.loadMoreCursorActive = false;
     if (this.selectedItemIds.has(itemId)) {
       this.selectedItemIds.delete(itemId);
     } else {
@@ -3635,6 +3684,7 @@ export class DrivePanelView extends ItemView {
   }
 
   private selectRangeTo(itemId: string, render: boolean): void {
+    this.loadMoreCursorActive = false;
     const items = this.getCurrentItems();
     const targetIndex = items.findIndex((item) => item.id === itemId);
     if (targetIndex === -1) {
