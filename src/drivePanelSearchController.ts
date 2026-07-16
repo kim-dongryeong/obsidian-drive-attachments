@@ -215,8 +215,18 @@ export class DrivePanelSearchController {
   }
 
   matchDriveIndexItems(items: DriveIndexItem[], query: string): DriveIndexItem[] {
+    // Relevance ordering (kdr QA): keep each hit's fuzzy score and sort best-first, the way
+    // drive.google.com ranks search results, instead of leaving index insertion order.
     const fuzzySearch = prepareFuzzySearch(query.normalize("NFC"));
-    return items.filter((item) => fuzzySearch(item.name.normalize("NFC")) !== null);
+    const scored: Array<{ item: DriveIndexItem; score: number }> = [];
+    for (const item of items) {
+      const match = fuzzySearch(item.name.normalize("NFC"));
+      if (match !== null) {
+        scored.push({ item, score: match.score });
+      }
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored.map((entry) => entry.item);
   }
 
   ensurePanelIndex(): Promise<DriveIndexItem[]> {

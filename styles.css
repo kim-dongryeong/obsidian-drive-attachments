@@ -3181,6 +3181,23 @@
   stroke-width: 1.25;
 }
 
+/* A Drive-colored folder with a custom icon pack: the pack's folder image becomes a mask filled
+ * with the Drive color, so colored and uncolored folders share the exact same silhouette. */
+.gdab-folder-tint-mask {
+  display: inline-block;
+  width: var(--gdab-custom-icon-size, 20px);
+  height: var(--gdab-custom-icon-size, 20px);
+  vertical-align: middle;
+  -webkit-mask: var(--gdab-folder-mask) center / contain no-repeat;
+  mask: var(--gdab-folder-mask) center / contain no-repeat;
+}
+
+/* Second line under a menu item title (e.g. the Trash sort's API-limitation note). */
+.gdab-menu-item-note {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
 /* Keyboard cursor parked on the button (arrow-down past the last row) — mirrors a row's is-active
  * highlight so it reads as "the cursor is here; press Enter / ↓ again to load". */
 .gdab-drive-panel-load-more-button.is-cursor {

@@ -1704,15 +1704,23 @@ export class DrivePanelView extends ItemView {
       const color = folderColorHex(item.folderColorRgb);
       if (color) {
         // Custom-pack <img> and bundled-theme SVGs carry their own baked colors, so a CSS tint
-        // can't reach them (kdr QA: color changed on drive.google.com but not in the panel).
-        // drive.google.com renders colored folders as a solid tinted glyph anyway — do the same:
-        // replace whatever renderFileIcon drew with a Lucide folder that takes currentColor.
+        // can't reach them directly (kdr QA: color changed on drive.google.com but not in the
+        // panel). Keep the PACK's folder silhouette for visual consistency with uncolored folders
+        // (kdr QA round 2: glyph vs pack img looked mixed) by using the pack image as a CSS mask
+        // filled with the Drive color. Only without pack art fall back to a tinted Lucide glyph.
+        const packSrc = this.customIconSrc?.(item.mimeType, item.name);
         icon.empty();
-        // folder-closed = folder silhouette + an inner horizontal line; the CSS strokes only that
-        // line in the background color, so the flap edge shows without outlining the whole glyph.
-        setIcon(icon, "folder-closed");
-        icon.style.color = color;
-        icon.addClass("is-folder-colored");
+        if (packSrc) {
+          const tinted = icon.createSpan({ cls: "gdab-folder-tint-mask", attr: { "aria-hidden": "true" } });
+          tinted.style.setProperty("--gdab-folder-mask", `url("${packSrc}")`);
+          tinted.style.backgroundColor = color;
+        } else {
+          // folder-closed = folder silhouette + an inner horizontal line; the CSS strokes only that
+          // line in the background color, so the flap edge shows without outlining the whole glyph.
+          setIcon(icon, "folder-closed");
+          icon.style.color = color;
+          icon.addClass("is-folder-colored");
+        }
       }
     } else if (item.thumbnailLink && this.getSettings().panelViewMode === "grid") {
       // Thumbnails are a GRID-view affordance only — list/compact keep the type icon (kdr: thumbnails
@@ -1855,6 +1863,15 @@ export class DrivePanelView extends ItemView {
     if (evt.key === "Escape" && this.selectedItemIds.size > 0) {
       evt.preventDefault();
       this.clearSelection(true);
+      return;
+    }
+    if (evt.key === "Escape" && this.searchCtl.isDriveSearchActive()) {
+      // Esc with the LIST focused ends search mode too — the input's own Esc handler only fires
+      // while the box has focus, which it never does after clicking/arrowing into the results.
+      evt.preventDefault();
+      evt.stopPropagation();
+      this.searchCtl.exitDriveSearch();
+      void this.data.loadCurrentFolder(false);
       return;
     }
 
@@ -3652,6 +3669,11 @@ export class DrivePanelView extends ItemView {
       filtered = filtered.filter((it) => itemModifiedSince(it, cutoff));
     }
     const s = this.getSettings();
+    if (this.searchCtl.isDriveSearchActive()) {
+      // Search results stay in relevance order (index fuzzy score first, then server hits), the
+      // way drive.google.com ranks them — the folder-first/name sort would scramble the ranking.
+      return filtered;
+    }
     if (!this.searchCtl.isDriveSearchActive() && this.isInTrashPath()) {
       // Trash defaults to "Date trashed" (drive.google.com); the Sort menu can override per session.
       return this.trashSortOverride
@@ -4009,7 +4031,9 @@ export class DrivePanelView extends ItemView {
 
     const options: PanelSearchLocationOption[] = [
       panelSearchLocationOption("anywhere"),
-      ...(origin && !isVirtualRootId(origin.id)
+      // No current-folder entry when the search began at the My Drive root — the dedicated
+      // "My Drive" option below is the same scope and would render the label twice (kdr QA).
+      ...(origin && !isVirtualRootId(origin.id) && origin.id !== MY_DRIVE_ROOT.id
         ? [panelSearchLocationOption("current-folder", origin.name)]
         : []),
       panelSearchLocationOption("my-drive"),
@@ -4168,13 +4192,22 @@ export class DrivePanelView extends ItemView {
     menu.addItem((mi) => mi.setTitle("Sort by").setIsLabel(true));
     if (inTrash) {
       // Trash-only key, checked by default — drive.google.com's Trash sorts by trashed date.
-      menu.addItem((mi) =>
+      menu.addItem((mi) => {
+        // Honest labelling: Drive's API gives a real trashedTime only for shared-drive items, so
+        // My Drive trash approximates with the modified date — say so instead of pretending.
+        const title = createFragment((frag) => {
+          frag.createDiv({ text: "Date trashed" });
+          frag.createDiv({
+            cls: "gdab-menu-item-note",
+            text: "My Drive items: by modified date (Drive API limit)",
+          });
+        });
         mi
-          .setTitle("Date trashed")
+          .setTitle(title)
           .setIcon("trash-2")
           .setChecked(this.trashSortOverride === null)
-          .onClick(() => this.setTrashSort({ clearKey: true })),
-      );
+          .onClick(() => this.setTrashSort({ clearKey: true }));
+      });
     }
     const driveKeys: Array<{ key: PanelSortKey; label: string; icon: string }> = [
       { key: "name", label: "Name", icon: "case-sensitive" },
