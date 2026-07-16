@@ -424,6 +424,26 @@ export function friendlyMimeType(mimeType: string): string {
   }
 }
 
+// The Trash view's default order — most recently trashed first, drive.google.com's "Date trashed".
+// trashedTime is not a valid server orderBy key, so this runs client-side. Folders-first (when on)
+// still groups directories; missing/unparsable timestamps sink to the bottom via the name tiebreak.
+export function sortDriveItemsByTrashedTime(items: DriveBrowserItem[], foldersFirst: boolean): DriveBrowserItem[] {
+  const byName = (a: DriveBrowserItem, b: DriveBrowserItem): number =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
+  return [...items].sort((a, b) => {
+    if (foldersFirst) {
+      const fa = a.mimeType === DRIVE_FOLDER_MIME_TYPE;
+      const fb = b.mimeType === DRIVE_FOLDER_MIME_TYPE;
+      if (fa !== fb) {
+        return fa ? -1 : 1;
+      }
+    }
+    const ta = Date.parse(a.trashedTime ?? "") || 0;
+    const tb = Date.parse(b.trashedTime ?? "") || 0;
+    return tb - ta || byName(a, b);
+  });
+}
+
 // Drive returns folderColorRgb as a "#RRGGBB" hex string from its fixed palette. Validate before
 // tinting so a malformed/unexpected value can't reach the inline style; an invalid or absent color
 // leaves the folder its default muted tint.

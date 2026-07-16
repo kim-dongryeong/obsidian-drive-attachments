@@ -3166,6 +3166,13 @@
   cursor: default;
 }
 
+/* A Drive-colored folder renders as a solid tinted glyph (drive.google.com parity): fill the Lucide
+ * outline with the same currentColor the view sets on the icon element. */
+.gdab-drive-panel-row-icon.is-folder-colored svg {
+  fill: currentColor;
+  stroke: currentColor;
+}
+
 /* Keyboard cursor parked on the button (arrow-down past the last row) — mirrors a row's is-active
  * highlight so it reads as "the cursor is here; press Enter / ↓ again to load". */
 .gdab-drive-panel-load-more-button.is-cursor {

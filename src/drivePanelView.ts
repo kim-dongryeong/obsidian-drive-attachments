@@ -51,6 +51,7 @@ import {
   panelViewIcon,
   sortDirectionOptions,
   sortDriveItems,
+  sortDriveItemsByTrashedTime,
   sortFolderFirst,
 } from "./drivePanelFormat";
 import {
@@ -1179,6 +1180,9 @@ export class DrivePanelView extends ItemView {
     iconButton("arrow-left", "Back", !this.canGoBack(), () => this.goBack());
     iconButton("arrow-right", "Forward", !this.canGoForward(), () => this.goForward());
     iconButton("arrow-up", "Up to parent folder", this.path.length <= 1, () => this.navigateUp());
+    // Always-reachable "New folder" — the empty-space context menu needs blank space below the rows,
+    // which a long listing never shows without scrolling to the very bottom (kdr QA).
+    iconButton("folder-plus", "New folder", this.isCurrentVirtualRoot(), () => this.openNewFolderModal());
     iconButton("refresh-cw", "Refresh", false, () => {
       void this.loadRoots(true);
       void this.loadCurrentFolder(true);
@@ -1863,9 +1867,14 @@ export class DrivePanelView extends ItemView {
     );
     if (isFolder) {
       // Tint the folder icon to match its Drive "Change color" choice (drive.google.com parity).
-      // Setting it as a class lets the swatch submenu (next slice) toggle it live.
       const color = folderColorHex(item.folderColorRgb);
       if (color) {
+        // Custom-pack <img> and bundled-theme SVGs carry their own baked colors, so a CSS tint
+        // can't reach them (kdr QA: color changed on drive.google.com but not in the panel).
+        // drive.google.com renders colored folders as a solid tinted glyph anyway — do the same:
+        // replace whatever renderFileIcon drew with a Lucide folder that takes currentColor.
+        icon.empty();
+        setIcon(icon, "folder");
         icon.style.color = color;
         icon.addClass("is-folder-colored");
       }
@@ -2021,6 +2030,32 @@ export class DrivePanelView extends ItemView {
         this.goBack();
       } else {
         this.goForward();
+      }
+      return;
+    }
+
+    // Finder/Explorer keyboard affordances on the focused row: F2 renames (Explorer), and the
+    // platform context-menu chords — Ctrl+Enter (Finder), Shift+F10 and the dedicated ≣ menu key
+    // (Explorer) — open the same menu as a right-click on the row.
+    if (evt.key === "F2") {
+      const active = this.getActiveItem();
+      if (active) {
+        evt.preventDefault();
+        this.resetTypeAheadBuffer();
+        this.openRenameModal(active);
+      }
+      return;
+    }
+    if (
+      evt.key === "ContextMenu" ||
+      (evt.key === "F10" && evt.shiftKey) ||
+      (evt.key === "Enter" && evt.ctrlKey && !evt.metaKey)
+    ) {
+      const active = this.getActiveItem();
+      if (active) {
+        evt.preventDefault();
+        this.resetTypeAheadBuffer();
+        this.openMenuForActiveRow(active);
       }
       return;
     }
@@ -2327,6 +2362,29 @@ export class DrivePanelView extends ItemView {
     } else {
       this.confirmTrashItems(selected);
     }
+  }
+
+  // The item under the keyboard cursor, or null when no row is active.
+  private getActiveItem(): DriveBrowserItem | null {
+    if (!this.activeItemId) {
+      return null;
+    }
+    return this.getCurrentItems().find((candidate) => candidate.id === this.activeItemId) ?? null;
+  }
+
+  // Keyboard context menu (Ctrl+Enter / Shift+F10 / ≣): open the row's right-click menu anchored to
+  // the active row itself — synthesize the MouseEvent showAtMouseEvent reads coordinates from.
+  private openMenuForActiveRow(item: DriveBrowserItem): void {
+    if (!this.selectedItemIds.has(item.id)) {
+      this.selectOnly(item.id, true);
+    }
+    const row = this.activeRowEl;
+    const rect = row?.getBoundingClientRect();
+    const evt = new MouseEvent("contextmenu", {
+      clientX: rect ? rect.left + Math.min(rect.width, 48) : 0,
+      clientY: rect ? rect.bottom - 2 : 0,
+    });
+    this.openPanelItemMenu(evt, item);
   }
 
   private activateActiveItem(): void {
@@ -2777,7 +2835,10 @@ export class DrivePanelView extends ItemView {
       this.selectedItemIds.clear();
       this.selectedItemIds.add(folderId);
       this.selectionAnchorId = folderId;
+      // Same post-modal focus restore as rename: cursor on the new folder, keyboard back in the list.
+      this.pendingActiveItemId = folderId;
       await this.loadCurrentFolder(true);
+      this.listEl?.focus();
       new Notice(`Created Drive folder: ${name}`);
     } catch (error) {
       new Notice(`Create Drive folder failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -3014,7 +3075,11 @@ export class DrivePanelView extends ItemView {
       this.forgetDetailMetadata([item.id]);
       new Notice(`Renamed to "${trimmed}".`);
       // Refetch the authoritative listing so the row's name (and the folder-first sort) update.
+      // The modal stole DOM focus and the reload rebuilds the rows, so re-anchor the keyboard
+      // cursor on the renamed item and give focus back to the list (kdr QA: arrows went dead).
+      this.pendingActiveItemId = item.id;
       await this.loadCurrentFolder(true);
+      this.listEl?.focus();
     } catch (error) {
       new Notice(`Rename failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
@@ -3747,6 +3812,10 @@ export class DrivePanelView extends ItemView {
       filtered = filtered.filter((it) => itemModifiedSince(it, cutoff));
     }
     const s = this.getSettings();
+    if (!this.isDriveSearchActive() && this.isInTrashPath()) {
+      // Trash orders by "date trashed", newest first — drive.google.com's default for that view.
+      return sortDriveItemsByTrashedTime(filtered, s.panelFoldersFirst);
+    }
     return sortDriveItems(filtered, s.panelSortKey, s.panelSortDir, s.panelFoldersFirst);
   }
 

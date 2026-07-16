@@ -5,7 +5,7 @@ const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
 const DRIVE_DRIVES_URL = "https://www.googleapis.com/drive/v3/drives";
 const DRIVE_ABOUT_URL = "https://www.googleapis.com/drive/v3/about";
 const DRIVE_BROWSER_FIELDS =
-  "nextPageToken,files(id,name,mimeType,iconLink,thumbnailLink,folderColorRgb,starred,shared,ownedByMe,modifiedTime,modifiedByMeTime,viewedByMeTime,size,webViewLink,owners(displayName,emailAddress))";
+  "nextPageToken,files(id,name,mimeType,iconLink,thumbnailLink,folderColorRgb,starred,shared,ownedByMe,modifiedTime,modifiedByMeTime,viewedByMeTime,trashedTime,size,webViewLink,owners(displayName,emailAddress))";
 const DRIVE_METADATA_FIELDS = [
   "id",
   "name",
@@ -68,6 +68,10 @@ export interface DriveBrowserItem {
   // signed-in user has never touched, so the sort falls back to a name compare.
   modifiedByMeTime?: string;
   viewedByMeTime?: string;
+  // When the item sits in the trash: the moment it was trashed. Drives the Trash view's default
+  // "date trashed" ordering (drive.google.com parity) — not a valid server orderBy key, so the
+  // panel sorts client-side.
+  trashedTime?: string;
   size?: string;
   webViewLink?: string;
   // Shared-drive items commonly omit owners because they belong to the organization rather than
@@ -515,6 +519,7 @@ function isDriveBrowserItem(value: unknown): value is DriveBrowserItem {
     isOptionalString(candidate.modifiedTime) &&
     isOptionalString(candidate.modifiedByMeTime) &&
     isOptionalString(candidate.viewedByMeTime) &&
+    isOptionalString(candidate.trashedTime) &&
     isOptionalString(candidate.size) &&
     isOptionalString(candidate.webViewLink) &&
     isOptionalDriveOwners(candidate.owners)

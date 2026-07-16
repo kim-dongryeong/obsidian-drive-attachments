@@ -20,6 +20,7 @@ import {
   panelTypeLabel,
   sortDirectionOptions,
   sortDriveItems,
+  sortDriveItemsByTrashedTime,
   sortFolderFirst,
 } from "./drivePanelFormat";
 
@@ -220,6 +221,31 @@ describe("modified-range helpers", () => {
   it("panelModifiedPhrase reads naturally", () => {
     expect(panelModifiedPhrase("today")).toBe("today");
     expect(panelModifiedPhrase("last7")).toBe("in the last 7 days");
+  });
+});
+
+describe("sortDriveItemsByTrashedTime", () => {
+  it("newest trashed first, missing timestamps last (name tiebreak)", () => {
+    const out = sortDriveItemsByTrashedTime(
+      [
+        item({ name: "old", trashedTime: "2026-01-01T00:00:00Z" }),
+        item({ name: "none" }),
+        item({ name: "new", trashedTime: "2026-07-01T00:00:00Z" }),
+      ],
+      false,
+    );
+    expect(out.map((i) => i.name)).toEqual(["new", "old", "none"]);
+  });
+
+  it("foldersFirst keeps folders grouped on top", () => {
+    const out = sortDriveItemsByTrashedTime(
+      [
+        item({ name: "file", trashedTime: "2026-07-01T00:00:00Z" }),
+        folder("dir"),
+      ],
+      true,
+    );
+    expect(out.map((i) => i.name)).toEqual(["dir", "file"]);
   });
 });
 
