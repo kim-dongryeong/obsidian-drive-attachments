@@ -5,7 +5,6 @@ import {
   Menu,
   Modal,
   Notice,
-  prepareFuzzySearch,
   Scope,
   setIcon,
   TFile,
@@ -14,7 +13,7 @@ import {
 import { formatBytes } from "./byteFormat";
 import { computeMd5HexFromSource, DriveDedupHit, DriveDedupService } from "./driveDedupService";
 import { DriveAuthService } from "./driveAuthService";
-import { DriveIndexItem, DriveIndexService } from "./driveIndexService";
+import { DriveIndexService } from "./driveIndexService";
 import {
   DriveBrowserItem,
   DriveMetadata,
@@ -101,7 +100,6 @@ import {
 import { getDriveResultIcon, getDriveResultTypeClass, renderDriveResultHint, renderSearchHighlights } from "./driveSearchModal";
 import {
   type DriveSearchLocationQuery,
-  type DriveSearchResult,
   DriveSearchService,
 } from "./driveSearchService";
 import { DRIVE_FOLDER_MIME_TYPE, DRIVE_PANEL_DRAG_MIME, serializeDrivePanelDragItems } from "./driveTypes";
@@ -121,6 +119,12 @@ import { DriveFileOpsService } from "./driveFileOpsService";
 import { DriveThumbnailService } from "./driveThumbnailService";
 import { DrivePanelThumbnails } from "./drivePanelThumbnails";
 import { DrivePanelDataController } from "./drivePanelDataController";
+import {
+  DrivePanelSearchController,
+  PanelSearchLocation,
+  PanelSearchLocationOption,
+  panelSearchLocationOption,
+} from "./drivePanelSearchController";
 import {
   DrivePanelLocation,
   isVirtualRootId,
@@ -155,8 +159,6 @@ interface DrivePanelDetailRecord {
 
 
 const TYPE_AHEAD_RESET_MS = 900;
-const DRIVE_PANEL_SEARCH_DEBOUNCE_MS = 300;
-const DRIVE_PANEL_SEARCH_RESULT_LIMIT = 200;
 
 // DataTransfer marker stamped on a Drive-internal row drag. Detection actually keys off the in-memory
 // `internalDrag` field; this payload only ensures Electron registers the drag and keeps the move/copy
@@ -165,6 +167,9 @@ const DRIVE_INTERNAL_DRAG_MIME = "application/x-gdab-drive-items";
 
 export class DrivePanelView extends ItemView {
   private readonly path: DrivePanelLocation[] = [{ ...MY_DRIVE_ROOT }];
+  // Hybrid search + chip-filter state (query, scope, index/server merge, Type/People/Modified) —
+  // see drivePanelSearchController.ts (T-011 P7). The view reads state and calls search methods.
+  private readonly searchCtl: DrivePanelSearchController;
   // Folder listings, pagination tokens, shared-drive roots, and their generation guards — see
   // drivePanelDataController.ts (T-011 P6). The view reads state and calls load methods on it.
   private readonly data: DrivePanelDataController;
@@ -181,32 +186,6 @@ export class DrivePanelView extends ItemView {
   private addressBarBusy = false;
   private addressBarEditing = false;
   private dropHintEl: HTMLElement | null = null;
-  private filterQuery = "";
-  // Captured when an empty query becomes active. Location=current-folder must stay anchored to the
-  // folder where the search began even while asynchronous index/server results stream in.
-  private searchOriginPath: DrivePanelLocation[] | null = null;
-  private searchLocation: PanelSearchLocation = "current-folder";
-  private searchIndexItems: DriveIndexItem[] = [];
-  private searchServerItems: DriveSearchResult[] = [];
-  private searchLoading = false;
-  private searchError: string | null = null;
-  private searchHasMore = false;
-  private searchTimer: number | null = null;
-  private searchGeneration = 0;
-  private panelIndexPromise: Promise<DriveIndexItem[]> | null = null;
-  // Drive-style "Type ▾" filter chip: restricts the loaded listing to a single file-type category
-  // (folders / documents / images / …). In-memory + transient like `filterQuery` — it ANDs with the
-  // name filter, is purely client-side over the already-loaded folder, and resets on panel reopen.
-  private typeFilter: PanelTypeCategory | null = null;
-  // Drive-style "People ▾" filter chip. The stable key prefers an owner's email address while the
-  // label remains human-friendly; owners absent from shared-drive items simply do not match.
-  private peopleFilter: PanelOwnerOption | null = null;
-  // Drive-style "Modified ▾" filter chip: restricts the loaded listing to a recency window
-  // (Today / Last 7 days / Last 30 days / This year). In-memory + transient like the other chips —
-  // it ANDs with Type + People + name, is client-side over `modifiedTime`, and resets on reopen.
-  // The cutoff is recomputed against `Date.now()` each filter pass; items without a parseable
-  // `modifiedTime` simply do not match.
-  private modifiedFilter: PanelModifiedRange | null = null;
   // The Drive items being dragged within the panel (a row, or the whole selection). Non-null only
   // during a Drive-internal drag; lets the folder-row handlers route to MOVE/COPY instead of upload.
   private internalDrag: DriveBrowserItem[] | null = null;
@@ -287,6 +266,13 @@ export class DrivePanelView extends ItemView {
       this.openRenameModal(active);
       return false; // handled: preventDefault + stop the global hotkey
     });
+    this.searchCtl = new DrivePanelSearchController(index, search, {
+      currentPath: () => this.path,
+      currentLocationId: () => this.currentLocation.id,
+      render: () => this.render(),
+      refreshListOnly: () => this.refreshListOnly(),
+      clearSelection: () => this.clearSelection(false),
+    });
     this.data = new DrivePanelDataController(metadata, {
       canBrowse: () => this.canBrowse(),
       currentFolderId: () => this.currentLocation.id,
@@ -318,15 +304,15 @@ export class DrivePanelView extends ItemView {
     this.resetHistory();
     this.render();
     void this.data.loadRoots(false);
-    void this.ensurePanelIndex().catch(() => undefined);
+    void this.searchCtl.ensurePanelIndex().catch(() => undefined);
     await this.data.loadCurrentFolder(false);
   }
 
   async onClose(): Promise<void> {
     // Abandon any in-flight folder/root load so its late .then can't paint a torn-down view.
     this.data.cancelInFlight();
-    this.cancelDriveSearch();
-    this.panelIndexPromise = null;
+    this.searchCtl.cancelDriveSearch();
+    this.searchCtl.resetIndexPromise();
     this.data.invalidateAll();
     this.clearSelection(false);
     this.resetTypeAheadBuffer();
@@ -348,11 +334,11 @@ export class DrivePanelView extends ItemView {
   // availability gates as onOpen so disabling/disconnecting immediately replaces the live browser
   // with its CTA, while enabling/reconnecting reloads Drive instead of leaving a stale empty panel.
   refreshAvailability(): void {
-    this.exitDriveSearch();
-    this.panelIndexPromise = null;
+    this.searchCtl.exitDriveSearch();
+    this.searchCtl.resetIndexPromise();
     void this.data.loadRoots(true);
     if (this.canBrowse()) {
-      void this.ensurePanelIndex().catch(() => undefined);
+      void this.searchCtl.ensurePanelIndex().catch(() => undefined);
     }
     void this.data.loadCurrentFolder(true);
   }
@@ -1103,7 +1089,7 @@ export class DrivePanelView extends ItemView {
     // While searching, the results can come from anywhere in Drive, so the path trail is meaningless
     // — show "Search results" instead (drive.google.com parity). Each result's true location is
     // reachable via its row menu's "Open location".
-    if (this.isDriveSearchActive()) {
+    if (this.searchCtl.isDriveSearchActive()) {
       breadcrumbs.addClass("is-search-results");
       breadcrumbs.createSpan({
         cls: "gdab-drive-panel-breadcrumb is-current",
@@ -1161,7 +1147,7 @@ export class DrivePanelView extends ItemView {
       segment.setAttribute("role", "button");
       segment.setAttribute("tabindex", "0");
       const navigate = (): void => {
-        this.exitDriveSearch();
+        this.searchCtl.exitDriveSearch();
         this.path.splice(index + 1);
         this.pushHistory();
         this.clearSelection(false);
@@ -1343,7 +1329,7 @@ export class DrivePanelView extends ItemView {
       return;
     }
 
-    this.exitDriveSearch();
+    this.searchCtl.exitDriveSearch();
     this.resetTypeAheadBuffer();
     const previousRootId = this.path[0]?.id;
     const nextPath = this.path.slice(0, index).map((segment) => ({ ...segment }));
@@ -1485,7 +1471,7 @@ export class DrivePanelView extends ItemView {
         return;
       }
 
-      this.exitDriveSearch();
+      this.searchCtl.exitDriveSearch();
       this.resetTypeAheadBuffer();
       const previousRootId = this.path[0]?.id;
       this.path.splice(0, this.path.length, ...resolved);
@@ -1547,22 +1533,22 @@ export class DrivePanelView extends ItemView {
     });
     list.addEventListener("keydown", (evt) => this.handleListKeydown(evt));
 
-    if (this.isDriveSearchActive()) {
-      const rawItems = this.getDriveSearchItems();
-      if (this.searchLoading && rawItems.length === 0) {
+    if (this.searchCtl.isDriveSearchActive()) {
+      const rawItems = this.searchCtl.getDriveSearchItems();
+      if (this.searchCtl.searchLoading && rawItems.length === 0) {
         this.renderLoadingSkeleton(list, "Searching Drive...");
         return;
       }
 
-      if (this.searchError && rawItems.length === 0) {
+      if (this.searchCtl.searchError && rawItems.length === 0) {
         const error = list.createDiv({
           cls: "gdab-drive-panel-state is-entering",
           attr: { role: "alert" },
         });
         error.createDiv({ cls: "gdab-drive-panel-state-title", text: "Could not search Google Drive." });
-        error.createDiv({ cls: "gdab-drive-panel-state-detail", text: this.searchError });
+        error.createDiv({ cls: "gdab-drive-panel-state-detail", text: this.searchCtl.searchError });
         error.createEl("button", { text: "Retry" }).addEventListener("click", () => {
-          this.queueDriveSearch(true);
+          this.searchCtl.queueDriveSearch(true);
         });
         return;
       }
@@ -1739,11 +1725,11 @@ export class DrivePanelView extends ItemView {
     // Narrow-sidebar rows truncate long names (more so in grid); a native tooltip reveals the full
     // name on hover, like Finder/Explorer/Drive. `attr` sets the attribute safely (no innerHTML).
     const nameEl = title.createDiv({ cls: "gdab-drive-panel-row-name", attr: { title: item.name } });
-    if (this.isDriveSearchActive()) {
+    if (this.searchCtl.isDriveSearchActive()) {
       // While searching, highlight the matched query tokens in the result name — reuse the search
       // modal's DOM-span highlighter (colored gdab-search-hl-* spans, injection-safe, never innerHTML)
       // so the panel and the modal mark matches identically. Browse rows keep plain text.
-      renderSearchHighlights(item.name, this.filterQuery, nameEl);
+      renderSearchHighlights(item.name, this.searchCtl.filterQuery, nameEl);
     } else {
       nameEl.setText(item.name);
     }
@@ -2136,7 +2122,7 @@ export class DrivePanelView extends ItemView {
   // keyboard should reveal it too. A second arrow-down (or Enter) on the button then fetches the page.
   // Returns true when the key was consumed here.
   private tryFocusLoadMore(): boolean {
-    if (this.isDriveSearchActive() || this.data.loadingMoreFolderId !== null) {
+    if (this.searchCtl.isDriveSearchActive() || this.data.loadingMoreFolderId !== null) {
       return false;
     }
     if (!this.data.hasMorePages(this.currentLocation.id)) {
@@ -2267,7 +2253,7 @@ export class DrivePanelView extends ItemView {
     }
     // Remember the folder we're leaving so the cursor lands back on it in the parent (Finder/Explorer).
     const exitedFolderId = this.path[this.path.length - 1].id;
-    this.exitDriveSearch();
+    this.searchCtl.exitDriveSearch();
     this.resetTypeAheadBuffer();
     this.path.pop();
     this.pushHistory();
@@ -2282,7 +2268,7 @@ export class DrivePanelView extends ItemView {
   private applyPendingActiveItem(): void {
     const id = this.pendingActiveItemId;
     this.pendingActiveItemId = null;
-    if (!id || this.isDriveSearchActive()) {
+    if (!id || this.searchCtl.isDriveSearchActive()) {
       return;
     }
     if (this.getCurrentItems().some((item) => item.id === id)) {
@@ -2298,8 +2284,8 @@ export class DrivePanelView extends ItemView {
     // A folder opened from Drive-wide search results may live anywhere in Drive, so it is NOT a child
     // of the current path. Trashed results remain flat/non-navigable, matching the panel's Trash root;
     // every other search scope skips the current-path Trash guard and opens a fresh location.
-    const fromSearch = this.isDriveSearchActive();
-    const fromTrashedSearch = fromSearch && this.searchLocation === "trashed";
+    const fromSearch = this.searchCtl.isDriveSearchActive();
+    const fromTrashedSearch = fromSearch && this.searchCtl.searchLocation === "trashed";
     if (fromTrashedSearch || (!fromSearch && this.isInTrashPath())) {
       // Trashed folders list nothing here (listFolder filters `trashed = false`); their trashed
       // contents already appear flat in this Trash view. Keep trashed folders non-navigable so the
@@ -2307,7 +2293,7 @@ export class DrivePanelView extends ItemView {
       new Notice("Trashed folders can't be opened. Their trashed contents are already listed in Trash; restore the folder to browse it.");
       return;
     }
-    this.exitDriveSearch();
+    this.searchCtl.exitDriveSearch();
     this.resetTypeAheadBuffer();
     if (fromSearch) {
       // Open it as a fresh top-level location rather than appending a misleading deep trail onto the
@@ -2393,7 +2379,7 @@ export class DrivePanelView extends ItemView {
     if (!entry) {
       return;
     }
-    this.exitDriveSearch();
+    this.searchCtl.exitDriveSearch();
     this.resetTypeAheadBuffer();
     this.path.splice(0, this.path.length, ...entry.map((location) => ({ ...location })));
     this.clearSelection(false);
@@ -2434,7 +2420,7 @@ export class DrivePanelView extends ItemView {
     );
     // "Open location" for a search hit: jump to the folder the item actually lives in (drive.google.com
     // parity). Only meaningful while searching, where the result isn't a child of the current folder.
-    if (this.isDriveSearchActive() && item.parents && item.parents.length > 0) {
+    if (this.searchCtl.isDriveSearchActive() && item.parents && item.parents.length > 0) {
       menu.addItem((mi) =>
         mi.setTitle("Open location").setIcon("folder-tree").onClick(() => this.openItemLocation(item)),
       );
@@ -3214,7 +3200,7 @@ export class DrivePanelView extends ItemView {
     }
     text.createDiv({ cls: "gdab-drive-panel-detail-meta", text: meta.join(" · ") });
 
-    const location = this.isDriveSearchActive()
+    const location = this.searchCtl.isDriveSearchActive()
       ? this.searchResultLocation(item)
       : this.currentBreadcrumb;
     if (location) {
@@ -3642,8 +3628,8 @@ export class DrivePanelView extends ItemView {
   }
 
   private getCurrentRawItems(): DriveBrowserItem[] {
-    return this.isDriveSearchActive()
-      ? this.getDriveSearchItems()
+    return this.searchCtl.isDriveSearchActive()
+      ? this.searchCtl.getDriveSearchItems()
       : (this.data.getCached(this.currentLocation.id) ?? []);
   }
 
@@ -3652,21 +3638,21 @@ export class DrivePanelView extends ItemView {
   // Single source of truth: render, keyboard nav, select-all, and menu targets all read getCurrentItems().
   private displayItems(raw: DriveBrowserItem[]): DriveBrowserItem[] {
     let filtered = raw;
-    if (this.typeFilter) {
-      const category = this.typeFilter;
+    if (this.searchCtl.typeFilter) {
+      const category = this.searchCtl.typeFilter;
       filtered = filtered.filter((it) => matchesTypeCategory(it.mimeType, category));
     }
-    if (this.peopleFilter) {
-      const ownerKey = this.peopleFilter.key;
+    if (this.searchCtl.peopleFilter) {
+      const ownerKey = this.searchCtl.peopleFilter.key;
       filtered = filtered.filter((it) => itemHasOwner(it, ownerKey));
     }
-    if (this.modifiedFilter) {
-      const range = this.modifiedFilter;
+    if (this.searchCtl.modifiedFilter) {
+      const range = this.searchCtl.modifiedFilter;
       const cutoff = modifiedRangeCutoff(range, Date.now());
       filtered = filtered.filter((it) => itemModifiedSince(it, cutoff));
     }
     const s = this.getSettings();
-    if (!this.isDriveSearchActive() && this.isInTrashPath()) {
+    if (!this.searchCtl.isDriveSearchActive() && this.isInTrashPath()) {
       // Trash defaults to "Date trashed" (drive.google.com); the Sort menu can override per session.
       return this.trashSortOverride
         ? sortDriveItems(filtered, this.trashSortOverride, this.trashSortDir, s.panelFoldersFirst)
@@ -3681,20 +3667,20 @@ export class DrivePanelView extends ItemView {
     this.activeRowEl = null;
     const items = this.displayItems(rawItems);
     if (items.length === 0) {
-      const q = this.filterQuery.trim();
+      const q = this.searchCtl.filterQuery.trim();
       let msg: string;
-      if (this.isDriveSearchActive() && rawItems.length === 0) {
+      if (this.searchCtl.isDriveSearchActive() && rawItems.length === 0) {
         msg = `No Drive items match "${q}".`;
       } else if (rawItems.length === 0) {
         msg = this.isCurrentVirtualRoot()
           ? this.virtualRootEmptyMessage(this.currentLocation.id)
           : "This Drive folder is empty.";
-      } else if (this.typeFilter && !this.peopleFilter && !this.modifiedFilter && !q) {
-        msg = `No loaded items are ${panelTypeLabel(this.typeFilter).toLowerCase()}.`;
-      } else if (this.peopleFilter && !this.typeFilter && !this.modifiedFilter && !q) {
-        msg = `No loaded items are owned by ${this.peopleFilter.label}.`;
-      } else if (this.modifiedFilter && !this.typeFilter && !this.peopleFilter && !q) {
-        msg = `No loaded items were modified ${panelModifiedPhrase(this.modifiedFilter)}.`;
+      } else if (this.searchCtl.typeFilter && !this.searchCtl.peopleFilter && !this.searchCtl.modifiedFilter && !q) {
+        msg = `No loaded items are ${panelTypeLabel(this.searchCtl.typeFilter).toLowerCase()}.`;
+      } else if (this.searchCtl.peopleFilter && !this.searchCtl.typeFilter && !this.searchCtl.modifiedFilter && !q) {
+        msg = `No loaded items are owned by ${this.searchCtl.peopleFilter.label}.`;
+      } else if (this.searchCtl.modifiedFilter && !this.searchCtl.typeFilter && !this.searchCtl.peopleFilter && !q) {
+        msg = `No loaded items were modified ${panelModifiedPhrase(this.searchCtl.modifiedFilter)}.`;
       } else {
         msg = "No items match the current filters.";
       }
@@ -3725,17 +3711,17 @@ export class DrivePanelView extends ItemView {
     this.detailBarEl = null;
     this.contentEl.querySelectorAll(".gdab-drive-panel-selection-bar").forEach((element) => element.remove());
 
-    if (this.isDriveSearchActive()) {
-      const rawItems = this.getDriveSearchItems();
-      if (this.searchLoading && rawItems.length === 0) {
+    if (this.searchCtl.isDriveSearchActive()) {
+      const rawItems = this.searchCtl.getDriveSearchItems();
+      if (this.searchCtl.searchLoading && rawItems.length === 0) {
         this.renderLoadingSkeleton(list, "Searching Drive...");
         return;
       }
-      if (this.searchError && rawItems.length === 0) {
+      if (this.searchCtl.searchError && rawItems.length === 0) {
         const error = list.createDiv({ cls: "gdab-drive-panel-state", attr: { role: "alert" } });
         error.createDiv({ cls: "gdab-drive-panel-state-title", text: "Could not search Google Drive." });
-        error.createDiv({ cls: "gdab-drive-panel-state-detail", text: this.searchError });
-        error.createEl("button", { text: "Retry" }).addEventListener("click", () => this.queueDriveSearch(true));
+        error.createDiv({ cls: "gdab-drive-panel-state-detail", text: this.searchCtl.searchError });
+        error.createEl("button", { text: "Retry" }).addEventListener("click", () => this.searchCtl.queueDriveSearch(true));
         return;
       }
       this.populateRows(list, rawItems, false);
@@ -3802,95 +3788,23 @@ export class DrivePanelView extends ItemView {
     return scroll;
   }
 
-  private isDriveSearchActive(): boolean {
-    return this.filterQuery.trim().length > 0;
-  }
-
-  private getDriveSearchItems(): DriveBrowserItem[] {
-    return this.locationScopedDriveSearchItems().slice(0, DRIVE_PANEL_SEARCH_RESULT_LIMIT);
-  }
-
-  private mergeDriveSearchItems(): DriveBrowserItem[] {
-    // Overlay fresh server listing metadata (owners, modifiedTime, starred, shared, …) onto index hits
-    // the server also returned, so the Type / People / Modified chips can refine search results. The
-    // index crawl omits those fields; without this, the People/Modified chips would drop every index hit
-    // — even a real match — for want of metadata, because the merge below keeps the index copy and
-    // discards the metadata-bearing server copy of the same id. Server fields win (fresher); the index's
-    // precomputed `path` survives because the server copy never carries that key. Index-only hits (beyond
-    // the server's page, or fuzzy-only) still carry no owner/modified metadata, so those two chips treat
-    // the server result set as authoritative. `getSearchMetadataFilterStatus` explicitly signals when
-    // an active metadata chip hides one of those unevaluable index-only matches.
-    const serverById = new Map(this.searchServerItems.map((item) => [item.id, item] as const));
-    const indexIds = new Set(this.searchIndexItems.map((item) => item.id));
-    const enrichedIndexItems = this.searchIndexItems.map((indexItem) => {
-      const serverItem = serverById.get(indexItem.id);
-      return serverItem ? { ...indexItem, ...serverItem } : indexItem;
-    });
-    return [
-      ...enrichedIndexItems,
-      ...this.searchServerItems.filter((item) => !indexIds.has(item.id)),
-    ];
-  }
-
-  private locationScopedDriveSearchItems(): DriveBrowserItem[] {
-    if (this.searchLocation === "anywhere") {
-      return this.mergeDriveSearchItems();
-    }
-    if (this.searchLocation === "current-folder") {
-      const folderId = this.searchOriginPath?.[this.searchOriginPath.length - 1]?.id;
-      return folderId ? this.index.filterToFolderSubtree(this.mergeDriveSearchItems(), folderId) : [];
-    }
-    // The index intentionally does not persist starred/shared/ownership/trash metadata. These
-    // locations therefore use the server query as the authoritative result set instead of leaking
-    // unscoped index hits into the list.
-    return this.searchServerItems;
-  }
-
-  private hasMoreDriveSearchItems(): boolean {
-    return this.searchHasMore || this.locationScopedDriveSearchItems().length > DRIVE_PANEL_SEARCH_RESULT_LIMIT;
-  }
-
-  private getSearchMetadataFilterStatus(items: DriveBrowserItem[]): string | null {
-    const metadataFilters = [this.peopleFilter ? "People" : null, this.modifiedFilter ? "Modified" : null].filter(
-      (label): label is string => label !== null,
-    );
-    if (metadataFilters.length === 0 || !this.searchLocationUsesIndex()) {
-      return null;
-    }
-
-    const serverIds = new Set(this.searchServerItems.map((item) => item.id));
-    const hasHiddenIndexMatch = items.some(
-      (item) =>
-        !serverIds.has(item.id) &&
-        (!this.typeFilter || matchesTypeCategory(item.mimeType, this.typeFilter)),
-    );
-    if (!hasHiddenIndexMatch) {
-      return null;
-    }
-
-    const filterLabel = metadataFilters.join(" and ");
-    return `Some indexed matches lack ${filterLabel} metadata and are hidden by the active ${
-      metadataFilters.length === 1 ? "filter" : "filters"
-    }.`;
-  }
-
   // The Drive-search results footer: searching/error states, the "more matches exist" pagination hint,
   // and the metadata-filter disclosure. Shared by both render paths — the full `render()` (chip toggles
   // route here via `setPeopleFilter`/`setModifiedFilter`) and the in-place `refreshListOnly()` (typing,
   // results arriving) — so the People/Modified "hidden indexed matches" warning shows in every path, not
   // only when results stream in. `rawItems` is the location-scoped, pre-`displayItems` merged result set.
   private renderDriveSearchStatus(list: HTMLElement, rawItems: DriveBrowserItem[]): void {
-    const hasMore = this.hasMoreDriveSearchItems();
-    const metadataFilterStatus = this.getSearchMetadataFilterStatus(rawItems);
-    if (!(this.searchLoading || hasMore || metadataFilterStatus || this.searchError)) {
+    const hasMore = this.searchCtl.hasMoreDriveSearchItems();
+    const metadataFilterStatus = this.searchCtl.getSearchMetadataFilterStatus(rawItems);
+    if (!(this.searchCtl.searchLoading || hasMore || metadataFilterStatus || this.searchCtl.searchError)) {
       return;
     }
     list.createDiv({
-      cls: `gdab-drive-panel-search-status${this.searchError ? " is-error" : ""}`,
-      attr: { role: this.searchError ? "alert" : "status" },
-      text: this.searchError
-        ? this.searchError
-        : this.searchLoading
+      cls: `gdab-drive-panel-search-status${this.searchCtl.searchError ? " is-error" : ""}`,
+      attr: { role: this.searchCtl.searchError ? "alert" : "status" },
+      text: this.searchCtl.searchError
+        ? this.searchCtl.searchError
+        : this.searchCtl.searchLoading
           ? "Searching Drive..."
           : metadataFilterStatus
             ? `${metadataFilterStatus}${
@@ -3900,134 +3814,6 @@ export class DrivePanelView extends ItemView {
     });
   }
 
-  private queueDriveSearch(immediate = false, refreshChrome = false): void {
-    const generation = ++this.searchGeneration;
-    if (this.searchTimer !== null) {
-      window.clearTimeout(this.searchTimer);
-      this.searchTimer = null;
-    }
-
-    const query = this.filterQuery.trim();
-    let searchModeChanged = false;
-    if (query && this.searchOriginPath === null) {
-      this.searchOriginPath = this.path.map((location) => ({ ...location }));
-      this.searchLocation = defaultPanelSearchLocation(this.currentLocation.id);
-      searchModeChanged = true;
-    } else if (!query && this.searchOriginPath !== null) {
-      this.searchOriginPath = null;
-      this.searchLocation = "current-folder";
-      searchModeChanged = true;
-    }
-    this.searchServerItems = [];
-    this.searchHasMore = false;
-    this.searchError = null;
-    this.clearSelection(false);
-    if (!query) {
-      this.searchIndexItems = [];
-      this.searchLoading = false;
-      if (searchModeChanged || refreshChrome) {
-        this.render();
-      } else {
-        this.refreshListOnly();
-      }
-      return;
-    }
-
-    // Mirror the search modal's hybrid path: show matching cached index entries immediately, then
-    // debounce a full index ensure + fresh server `name contains` query and merge both by Drive id.
-    this.searchIndexItems = this.searchLocationUsesIndex()
-      ? this.matchDriveIndexItems(this.index.getItems(), query)
-      : [];
-    this.searchLoading = true;
-    if (searchModeChanged || refreshChrome) {
-      this.render();
-    } else {
-      this.refreshListOnly();
-    }
-    this.searchTimer = window.setTimeout(() => {
-      this.searchTimer = null;
-      void this.runDriveSearch(query, generation);
-    }, immediate ? 0 : DRIVE_PANEL_SEARCH_DEBOUNCE_MS);
-  }
-
-  private async runDriveSearch(query: string, generation: number): Promise<void> {
-    const requests: Promise<void>[] = [];
-    if (this.searchLocationUsesIndex()) {
-      requests.push(this.ensurePanelIndex().then((items) => {
-        if (generation === this.searchGeneration) {
-          this.searchIndexItems = this.matchDriveIndexItems(items, query);
-          this.refreshListOnly();
-        }
-      }));
-    }
-    requests.push(this.search.searchByName(query, panelSearchServerLocation(this.searchLocation)).then((response) => {
-      if (generation === this.searchGeneration) {
-        this.searchServerItems = response.results;
-        this.searchHasMore = response.hasMore;
-        this.refreshListOnly();
-      }
-    }));
-
-    const settled = await Promise.allSettled(requests);
-    if (generation !== this.searchGeneration) {
-      return;
-    }
-
-    this.searchLoading = false;
-    const failures = settled.filter((result): result is PromiseRejectedResult => result.status === "rejected");
-    if (failures.length === settled.length) {
-      const reason = failures[0]?.reason;
-      this.searchError = reason instanceof Error ? reason.message : String(reason ?? "Drive search failed.");
-    }
-    this.refreshListOnly();
-  }
-
-  private searchLocationUsesIndex(): boolean {
-    return this.searchLocation === "anywhere" || this.searchLocation === "current-folder";
-  }
-
-  private matchDriveIndexItems(items: DriveIndexItem[], query: string): DriveIndexItem[] {
-    const fuzzySearch = prepareFuzzySearch(query.normalize("NFC"));
-    return items.filter((item) => fuzzySearch(item.name.normalize("NFC")) !== null);
-  }
-
-  private ensurePanelIndex(): Promise<DriveIndexItem[]> {
-    if (!this.panelIndexPromise) {
-      this.panelIndexPromise = this.index.ensureLoaded().catch((error: unknown) => {
-        this.panelIndexPromise = null;
-        throw error;
-      });
-    }
-    return this.panelIndexPromise;
-  }
-
-  private cancelDriveSearch(): void {
-    this.searchGeneration += 1;
-    if (this.searchTimer !== null) {
-      window.clearTimeout(this.searchTimer);
-      this.searchTimer = null;
-    }
-    this.searchLoading = false;
-  }
-
-  // Leaving the current listing (any folder/root navigation) ends Drive-wide search mode: cancel the
-  // in-flight query, drop the cached results, and clear the box so the destination folder's OWN
-  // contents render. Without this, every navigation kept `filterQuery` set, so `isDriveSearchActive()`
-  // stayed true and `renderBody` kept repainting the now-stale Drive-wide results — opening a folder
-  // (including a folder hit in the results) appeared to do nothing. Returns whether a search was active
-  // so the caller can branch (a search-result folder lives anywhere, not under the current path).
-  private exitDriveSearch(): boolean {
-    const wasActive = this.isDriveSearchActive();
-    this.cancelDriveSearch();
-    this.filterQuery = "";
-    this.searchIndexItems = [];
-    this.searchServerItems = [];
-    this.searchHasMore = false;
-    this.searchError = null;
-    this.searchOriginPath = null;
-    this.searchLocation = "current-folder";
-    return wasActive;
-  }
   // Drive-wide search and view controls. render() mounts this above the breadcrumbs, matching Drive.
   private renderPanelToolbar(contentEl: HTMLElement): HTMLInputElement {
     const bar = contentEl.createDiv({ cls: "gdab-drive-panel-toolbar" });
@@ -4045,33 +3831,33 @@ export class DrivePanelView extends ItemView {
         "aria-label": "Search Google Drive",
       },
     });
-    input.value = this.filterQuery;
+    input.value = this.searchCtl.filterQuery;
     const clearBtn = filterWrap.createEl("button", {
       cls: "gdab-drive-panel-filter-clear",
       attr: { type: "button", "aria-label": "Clear search", title: "Clear search" },
     });
     setIcon(clearBtn, "x");
-    clearBtn.toggleClass("is-hidden", this.filterQuery.length === 0);
+    clearBtn.toggleClass("is-hidden", this.searchCtl.filterQuery.length === 0);
     input.addEventListener("input", () => {
-      this.filterQuery = input.value;
+      this.searchCtl.filterQuery = input.value;
       clearBtn.toggleClass("is-hidden", input.value.length === 0);
-      this.queueDriveSearch();
+      this.searchCtl.queueDriveSearch();
     });
     input.addEventListener("keydown", (evt) => {
       if (evt.key === "Escape" && input.value) {
         evt.preventDefault();
         evt.stopPropagation();
         input.value = "";
-        this.filterQuery = "";
+        this.searchCtl.filterQuery = "";
         clearBtn.addClass("is-hidden");
-        this.queueDriveSearch();
+        this.searchCtl.queueDriveSearch();
       }
     });
     clearBtn.addEventListener("click", () => {
       input.value = "";
-      this.filterQuery = "";
+      this.searchCtl.filterQuery = "";
       clearBtn.addClass("is-hidden");
-      this.queueDriveSearch();
+      this.searchCtl.queueDriveSearch();
       input.focus();
     });
 
@@ -4102,12 +3888,12 @@ export class DrivePanelView extends ItemView {
   // active chips AND together over either the loaded folder or Drive-wide search results.
   private renderPanelFilterChips(contentEl: HTMLElement): void {
     const bar = contentEl.createDiv({ cls: "gdab-drive-panel-chips" });
-    const typeActive = this.typeFilter !== null;
-    const peopleActive = this.peopleFilter !== null;
-    const modifiedActive = this.modifiedFilter !== null;
+    const typeActive = this.searchCtl.typeFilter !== null;
+    const peopleActive = this.searchCtl.peopleFilter !== null;
+    const modifiedActive = this.searchCtl.modifiedFilter !== null;
 
-    if (this.isDriveSearchActive()) {
-      const location = panelSearchLocationOption(this.searchLocation, this.searchOriginFolder()?.name);
+    if (this.searchCtl.isDriveSearchActive()) {
+      const location = panelSearchLocationOption(this.searchCtl.searchLocation, this.searchOriginFolder()?.name);
       const locationChip = bar.createEl("button", {
         cls: "gdab-drive-panel-chip is-active",
         attr: {
@@ -4135,11 +3921,11 @@ export class DrivePanelView extends ItemView {
     typeChip.toggleClass("is-active", typeActive);
     setIcon(
       typeChip.createSpan({ cls: "gdab-drive-panel-chip-icon", attr: { "aria-hidden": "true" } }),
-      typeActive ? panelTypeIcon(this.typeFilter as PanelTypeCategory) : "shapes",
+      typeActive ? panelTypeIcon(this.searchCtl.typeFilter as PanelTypeCategory) : "shapes",
     );
     typeChip.createSpan({
       cls: "gdab-drive-panel-chip-label",
-      text: typeActive ? panelTypeLabel(this.typeFilter as PanelTypeCategory) : "Type",
+      text: typeActive ? panelTypeLabel(this.searchCtl.typeFilter as PanelTypeCategory) : "Type",
     });
     setIcon(
       typeChip.createSpan({ cls: "gdab-drive-panel-chip-caret", attr: { "aria-hidden": "true" } }),
@@ -4147,7 +3933,7 @@ export class DrivePanelView extends ItemView {
     );
     typeChip.setAttribute(
       "aria-label",
-      typeActive ? `Type filter: ${panelTypeLabel(this.typeFilter as PanelTypeCategory)}` : "Filter by type",
+      typeActive ? `Type filter: ${panelTypeLabel(this.searchCtl.typeFilter as PanelTypeCategory)}` : "Filter by type",
     );
     typeChip.addEventListener("click", (evt) => this.openTypeFilterMenu(evt));
 
@@ -4162,7 +3948,7 @@ export class DrivePanelView extends ItemView {
     );
     peopleChip.createSpan({
       cls: "gdab-drive-panel-chip-label",
-      text: peopleActive ? (this.peopleFilter as PanelOwnerOption).label : "People",
+      text: peopleActive ? (this.searchCtl.peopleFilter as PanelOwnerOption).label : "People",
     });
     setIcon(
       peopleChip.createSpan({ cls: "gdab-drive-panel-chip-caret", attr: { "aria-hidden": "true" } }),
@@ -4170,10 +3956,10 @@ export class DrivePanelView extends ItemView {
     );
     peopleChip.setAttribute(
       "aria-label",
-      peopleActive ? `People filter: ${(this.peopleFilter as PanelOwnerOption).label}` : "Filter by owner",
+      peopleActive ? `People filter: ${(this.searchCtl.peopleFilter as PanelOwnerOption).label}` : "Filter by owner",
     );
     if (peopleActive) {
-      peopleChip.setAttribute("title", (this.peopleFilter as PanelOwnerOption).menuLabel);
+      peopleChip.setAttribute("title", (this.searchCtl.peopleFilter as PanelOwnerOption).menuLabel);
     }
     peopleChip.addEventListener("click", (evt) => this.openPeopleFilterMenu(evt));
 
@@ -4184,11 +3970,11 @@ export class DrivePanelView extends ItemView {
     modifiedChip.toggleClass("is-active", modifiedActive);
     setIcon(
       modifiedChip.createSpan({ cls: "gdab-drive-panel-chip-icon", attr: { "aria-hidden": "true" } }),
-      modifiedActive ? panelModifiedIcon(this.modifiedFilter as PanelModifiedRange) : "calendar",
+      modifiedActive ? panelModifiedIcon(this.searchCtl.modifiedFilter as PanelModifiedRange) : "calendar",
     );
     modifiedChip.createSpan({
       cls: "gdab-drive-panel-chip-label",
-      text: modifiedActive ? panelModifiedLabel(this.modifiedFilter as PanelModifiedRange) : "Modified",
+      text: modifiedActive ? panelModifiedLabel(this.searchCtl.modifiedFilter as PanelModifiedRange) : "Modified",
     });
     setIcon(
       modifiedChip.createSpan({ cls: "gdab-drive-panel-chip-caret", attr: { "aria-hidden": "true" } }),
@@ -4197,7 +3983,7 @@ export class DrivePanelView extends ItemView {
     modifiedChip.setAttribute(
       "aria-label",
       modifiedActive
-        ? `Modified filter: ${panelModifiedLabel(this.modifiedFilter as PanelModifiedRange)}`
+        ? `Modified filter: ${panelModifiedLabel(this.searchCtl.modifiedFilter as PanelModifiedRange)}`
         : "Filter by modified date",
     );
     modifiedChip.addEventListener("click", (evt) => this.openModifiedFilterMenu(evt));
@@ -4236,7 +4022,7 @@ export class DrivePanelView extends ItemView {
         mi
           .setTitle(option.label)
           .setIcon(option.icon)
-          .setChecked(this.searchLocation === option.key)
+          .setChecked(this.searchCtl.searchLocation === option.key)
           .onClick(() => this.setSearchLocation(option.key)),
       );
     }
@@ -4244,16 +4030,16 @@ export class DrivePanelView extends ItemView {
   }
 
   private setSearchLocation(value: PanelSearchLocation): void {
-    if (this.searchLocation === value || !this.isDriveSearchActive()) {
+    if (this.searchCtl.searchLocation === value || !this.searchCtl.isDriveSearchActive()) {
       return;
     }
-    this.searchLocation = value;
+    this.searchCtl.searchLocation = value;
     this.resetTypeAheadBuffer();
-    this.queueDriveSearch(true, true);
+    this.searchCtl.queueDriveSearch(true, true);
   }
 
   private searchOriginFolder(): DrivePanelLocation | null {
-    const origin = this.searchOriginPath;
+    const origin = this.searchCtl.searchOriginPath;
     return origin?.[origin.length - 1] ?? null;
   }
 
@@ -4264,7 +4050,7 @@ export class DrivePanelView extends ItemView {
       mi
         .setTitle("All types")
         .setIcon("layers")
-        .setChecked(this.typeFilter === null)
+        .setChecked(this.searchCtl.typeFilter === null)
         .onClick(() => this.setTypeFilter(null)),
     );
     menu.addSeparator();
@@ -4273,7 +4059,7 @@ export class DrivePanelView extends ItemView {
         mi
           .setTitle(option.label)
           .setIcon(option.icon)
-          .setChecked(this.typeFilter === option.key)
+          .setChecked(this.searchCtl.typeFilter === option.key)
           .onClick(() => this.setTypeFilter(option.key)),
       );
     }
@@ -4281,10 +4067,10 @@ export class DrivePanelView extends ItemView {
   }
 
   private setTypeFilter(value: PanelTypeCategory | null): void {
-    if (this.typeFilter === value) {
+    if (this.searchCtl.typeFilter === value) {
       return;
     }
-    this.typeFilter = value;
+    this.searchCtl.typeFilter = value;
     this.resetTypeAheadBuffer();
     this.render(); // the chip row, list, and detail/selection bars all reflect the active filter
   }
@@ -4297,7 +4083,7 @@ export class DrivePanelView extends ItemView {
       mi
         .setTitle("Anyone")
         .setIcon("users")
-        .setChecked(this.peopleFilter === null)
+        .setChecked(this.searchCtl.peopleFilter === null)
         .onClick(() => this.setPeopleFilter(null)),
     );
     menu.addSeparator();
@@ -4309,7 +4095,7 @@ export class DrivePanelView extends ItemView {
           mi
             .setTitle(option.menuLabel)
             .setIcon("user")
-            .setChecked(this.peopleFilter?.key === option.key)
+            .setChecked(this.searchCtl.peopleFilter?.key === option.key)
             .onClick(() => this.setPeopleFilter(option)),
         );
       }
@@ -4318,10 +4104,10 @@ export class DrivePanelView extends ItemView {
   }
 
   private setPeopleFilter(value: PanelOwnerOption | null): void {
-    if (this.peopleFilter?.key === value?.key) {
+    if (this.searchCtl.peopleFilter?.key === value?.key) {
       return;
     }
-    this.peopleFilter = value;
+    this.searchCtl.peopleFilter = value;
     this.resetTypeAheadBuffer();
     this.render();
   }
@@ -4333,7 +4119,7 @@ export class DrivePanelView extends ItemView {
       mi
         .setTitle("Any time")
         .setIcon("infinity")
-        .setChecked(this.modifiedFilter === null)
+        .setChecked(this.searchCtl.modifiedFilter === null)
         .onClick(() => this.setModifiedFilter(null)),
     );
     menu.addSeparator();
@@ -4342,7 +4128,7 @@ export class DrivePanelView extends ItemView {
         mi
           .setTitle(option.label)
           .setIcon(option.icon)
-          .setChecked(this.modifiedFilter === option.key)
+          .setChecked(this.searchCtl.modifiedFilter === option.key)
           .onClick(() => this.setModifiedFilter(option.key)),
       );
     }
@@ -4350,21 +4136,21 @@ export class DrivePanelView extends ItemView {
   }
 
   private setModifiedFilter(value: PanelModifiedRange | null): void {
-    if (this.modifiedFilter === value) {
+    if (this.searchCtl.modifiedFilter === value) {
       return;
     }
-    this.modifiedFilter = value;
+    this.searchCtl.modifiedFilter = value;
     this.resetTypeAheadBuffer();
     this.render();
   }
 
   private clearPanelFilters(): void {
-    if (this.typeFilter === null && this.peopleFilter === null && this.modifiedFilter === null) {
+    if (this.searchCtl.typeFilter === null && this.searchCtl.peopleFilter === null && this.searchCtl.modifiedFilter === null) {
       return;
     }
-    this.typeFilter = null;
-    this.peopleFilter = null;
-    this.modifiedFilter = null;
+    this.searchCtl.typeFilter = null;
+    this.searchCtl.peopleFilter = null;
+    this.searchCtl.modifiedFilter = null;
     this.resetTypeAheadBuffer();
     this.render();
   }
@@ -4609,62 +4395,6 @@ export class DrivePanelView extends ItemView {
   }
 }
 
-
-type PanelSearchLocation =
-  | "anywhere"
-  | "current-folder"
-  | "my-drive"
-  | "shared-with-me"
-  | "starred"
-  | "trashed";
-
-interface PanelSearchLocationOption {
-  key: PanelSearchLocation;
-  label: string;
-  icon: string;
-}
-
-function defaultPanelSearchLocation(locationId: string): PanelSearchLocation {
-  switch (locationId) {
-    case SHARED_WITH_ME_ROOT.id:
-      return "shared-with-me";
-    case STARRED_ROOT.id:
-      return "starred";
-    case TRASH_ROOT.id:
-      return "trashed";
-    case RECENT_ROOT.id:
-      return "anywhere";
-    default:
-      // drive.google.com's search bar defaults to all of Drive, not the folder you're in.
-      // Current-folder (recursive) stays one chip-click away. (kdr's confirmed preference.)
-      return "anywhere";
-  }
-}
-
-function panelSearchServerLocation(location: PanelSearchLocation): DriveSearchLocationQuery {
-  return location === "current-folder" ? "anywhere" : location;
-}
-
-function panelSearchLocationOption(
-  key: PanelSearchLocation,
-  currentFolderName = "Current folder",
-): PanelSearchLocationOption {
-  switch (key) {
-    case "current-folder":
-      return { key, label: currentFolderName, icon: "folder" };
-    case "my-drive":
-      return { key, label: "My Drive", icon: "hard-drive" };
-    case "shared-with-me":
-      return { key, label: "Shared with me", icon: "users" };
-    case "starred":
-      return { key, label: "Starred", icon: "star" };
-    case "trashed":
-      return { key, label: "Trashed", icon: "trash-2" };
-    case "anywhere":
-    default:
-      return { key, label: "Anywhere in Drive", icon: "globe-2" };
-  }
-}
 
 
 
