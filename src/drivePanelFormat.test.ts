@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DriveBrowserItem } from "./driveMetadataService";
 import { DRIVE_FOLDER_MIME_TYPE } from "./driveTypes";
 import {
+  folderColorHex,
   formatAccountDomain,
   formatDetailMetadataError,
   formatPanelOwner,
@@ -219,6 +220,16 @@ describe("modified-range helpers", () => {
   it("panelModifiedPhrase reads naturally", () => {
     expect(panelModifiedPhrase("today")).toBe("today");
     expect(panelModifiedPhrase("last7")).toBe("in the last 7 days");
+  });
+});
+
+describe("folderColorHex", () => {
+  it("accepts a #RRGGBB palette value (trimmed), rejects anything else", () => {
+    expect(folderColorHex("#8f8f8f")).toBe("#8f8f8f");
+    expect(folderColorHex(" #FAD165 ")).toBe("#FAD165");
+    expect(folderColorHex("#fff")).toBeNull();
+    expect(folderColorHex("red")).toBeNull();
+    expect(folderColorHex(undefined)).toBeNull();
   });
 });
 

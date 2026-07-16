@@ -423,3 +423,15 @@ export function friendlyMimeType(mimeType: string): string {
       return opaque ? "File" : `${shortSub} file`;
   }
 }
+
+// Drive returns folderColorRgb as a "#RRGGBB" hex string from its fixed palette. Validate before
+// tinting so a malformed/unexpected value can't reach the inline style; an invalid or absent color
+// leaves the folder its default muted tint.
+export function folderColorHex(rgb: string | undefined): string | null {
+  if (!rgb) {
+    return null;
+  }
+  const trimmed = rgb.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : null;
+}
+
