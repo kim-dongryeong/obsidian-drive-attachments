@@ -52,20 +52,9 @@ import {
   sortDriveItemsByTrashedTime,
 } from "./drivePanelFormat";
 import {
-  captureDropEntries,
   describePanelDropItems,
-  extractPanelDropFiles,
-  FolderUploadPlan,
-  formatPanelUploadProgress,
-  formatPanelUploadSummary,
-  formatTreeUploadProgress,
-  formatTreeUploadSummary,
   hasLocalFileDrag,
-  isDirectoryEntry,
   isJunkFileName,
-  PanelDropUploadStats,
-  sortDirsByDepth,
-  walkDropEntries,
 } from "./drivePanelDropUtil";
 import {
   copyMenuTitle,
@@ -119,6 +108,7 @@ import { DriveFileOpsService } from "./driveFileOpsService";
 import { DriveThumbnailService } from "./driveThumbnailService";
 import { DrivePanelThumbnails } from "./drivePanelThumbnails";
 import { DrivePanelDataController } from "./drivePanelDataController";
+import { DrivePanelUploadController } from "./drivePanelUploadController";
 import {
   DrivePanelSearchController,
   PanelSearchLocation,
@@ -167,6 +157,9 @@ const DRIVE_INTERNAL_DRAG_MIME = "application/x-gdab-drive-items";
 
 export class DrivePanelView extends ItemView {
   private readonly path: DrivePanelLocation[] = [{ ...MY_DRIVE_ROOT }];
+  // Panel drag-and-drop upload workflow + in-flight guard — see drivePanelUploadController.ts
+  // (T-011 P8). The view keeps drag visuals, the confirm modal, and folder reloads.
+  private readonly uploadCtl: DrivePanelUploadController;
   // Hybrid search + chip-filter state (query, scope, index/server merge, Type/People/Modified) —
   // see drivePanelSearchController.ts (T-011 P7). The view reads state and calls search methods.
   private readonly searchCtl: DrivePanelSearchController;
@@ -177,7 +170,6 @@ export class DrivePanelView extends ItemView {
   // it there — revealing the button like a mouse scroll would — instead of auto-fetching the page).
   private loadMoreCursorActive = false;
   private panelDropEventsRegistered = false;
-  private panelDropInFlight = false;
   // One in-flight guard for panel Drive-write ops (rename/trash), separate from upload drops, so a
   // mutation and its follow-up reload can't overlap a second mutation fired in quick succession.
   private panelWriteInFlight = false;
@@ -265,6 +257,26 @@ export class DrivePanelView extends ItemView {
       this.resetTypeAheadBuffer();
       this.openRenameModal(active);
       return false; // handled: preventDefault + stop the global hotkey
+    });
+    this.uploadCtl = new DrivePanelUploadController(upload, dedup, {
+      canBrowse: () => this.canBrowse(),
+      dropUploadMode: () => this.getSettings().panelDropUpload,
+      currentFolderId: () => this.currentLocation.id,
+      setUploadingUi: (active) => this.contentEl.toggleClass("is-uploading", active),
+      setDropHint: (text) => this.setDropHint(text),
+      clearDropVisuals: () => {
+        this.setPanelDropHighlight(false);
+        this.clearFolderRowDropHighlight();
+      },
+      confirmDrop: (entries, files, target, targetBreadcrumb, onConfirm) =>
+        this.openPanelDropConfirmModal(entries, files, target, targetBreadcrumb, onConfirm),
+      refreshTargetFolder: async (targetId) => {
+        if (this.currentLocation.id === targetId) {
+          await this.data.loadCurrentFolder(true);
+        } else {
+          this.data.invalidate(targetId);
+        }
+      },
     });
     this.searchCtl = new DrivePanelSearchController(index, search, {
       currentPath: () => this.path,
@@ -393,7 +405,7 @@ export class DrivePanelView extends ItemView {
 
   private handlePanelDrop(evt: DragEvent): void {
     // A drop on empty space or a file row targets the folder currently shown in the panel.
-    this.processPanelDrop(evt, this.currentLocation, this.currentBreadcrumb);
+    this.uploadCtl.processPanelDrop(evt, this.currentLocation, this.currentBreadcrumb);
   }
 
   // A drop ONTO a folder row uploads INTO that folder (the one under the pointer), not the current
@@ -412,108 +424,14 @@ export class DrivePanelView extends ItemView {
     evt.stopPropagation();
     row.removeClass("is-drop-target");
     const breadcrumb = this.currentBreadcrumb ? `${this.currentBreadcrumb} / ${item.name}` : item.name;
-    this.processPanelDrop(evt, { id: item.id, name: item.name }, breadcrumb);
-  }
-
-  private processPanelDrop(evt: DragEvent, targetLocation: DrivePanelLocation, targetBreadcrumb: string): void {
-    this.setDropHint(null);
-    const mode = this.getSettings().panelDropUpload;
-    if (mode === "off") {
-      if (hasLocalFileDrag(evt.dataTransfer)) {
-        evt.preventDefault();
-        evt.stopPropagation();
-        this.setPanelDropHighlight(false);
-        this.clearFolderRowDropHighlight();
-        new Notice("Drive panel uploads are off in settings.");
-      }
-      return;
-    }
-
-    if (isVirtualRootId(targetLocation.id) && hasLocalFileDrag(evt.dataTransfer)) {
-      evt.preventDefault();
-      evt.stopPropagation();
-      this.setPanelDropHighlight(false);
-      new Notice(`Open a Drive folder before uploading files. ${virtualRootName(targetLocation.id)} is a collection.`);
-      return;
-    }
-
-    // Capture BOTH the flat file list and the directory entries synchronously (the D3 rule): the
-    // DataTransfer and its items go stale the moment this handler returns, so webkitGetAsEntry() must
-    // be called now — before any await in the upload path below — to walk dropped folders later.
-    const entries = captureDropEntries(evt.dataTransfer);
-    const files = extractPanelDropFiles(evt.dataTransfer);
-    if (!hasLocalFileDrag(evt.dataTransfer) && files.length === 0 && entries.length === 0) {
-      return;
-    }
-
-    evt.preventDefault();
-    evt.stopPropagation();
-    this.setPanelDropHighlight(false);
-    this.clearFolderRowDropHighlight();
-
-    const target = { ...targetLocation };
-    if (mode === "confirm") {
-      if (!this.canStartPanelDropUpload()) {
-        return;
-      }
-      this.openPanelDropConfirmModal(entries, files, target, targetBreadcrumb);
-      return;
-    }
-
-    this.startPanelDropUpload(entries, files, target);
-  }
-
-  private startPanelDropUpload(entries: FileSystemEntry[], files: File[], target: DrivePanelLocation): void {
-    if (!this.canStartPanelDropUpload()) {
-      return;
-    }
-
-    // A drop that includes any directory goes through the recursive tree path (which also carries the
-    // loose files dropped alongside it). A files-only drop keeps the flat Phase A path (md5 dedup).
-    if (entries.some(isDirectoryEntry)) {
-      void this.uploadPanelDroppedTree(entries, target);
-      return;
-    }
-
-    if (files.length === 0) {
-      new Notice("Drop local files or folders onto the Drive panel.");
-      return;
-    }
-
-    const uploadableFiles = files.filter((file) => !isJunkFileName(file.name));
-    const skippedJunk = files.length - uploadableFiles.length;
-    if (uploadableFiles.length === 0) {
-      new Notice(`Skipped ${formatCount(skippedJunk, "junk file")} from the Drive panel drop.`);
-      return;
-    }
-
-    void this.uploadPanelDroppedFiles(uploadableFiles, target, skippedJunk);
-  }
-
-  private canStartPanelDropUpload(): boolean {
-    if (this.getSettings().panelDropUpload === "off") {
-      new Notice("Drive panel uploads are off in settings.");
-      return false;
-    }
-
-    if (this.panelDropInFlight) {
-      new Notice("Wait for the current Drive upload to finish before dropping more files.");
-      return false;
-    }
-
-    if (!this.canBrowse()) {
-      new Notice("Connect Google Drive with browsing access before dropping files onto the Drive panel.");
-      return false;
-    }
-
-    return true;
+    this.uploadCtl.processPanelDrop(evt, { id: item.id, name: item.name }, breadcrumb);
   }
 
   private canAcceptPanelDrop(target: DrivePanelLocation = this.currentLocation): boolean {
     return !isVirtualRootId(target.id)
       && this.getSettings().panelDropUpload !== "off"
       && this.canBrowse()
-      && !this.panelDropInFlight;
+      && !this.uploadCtl.inFlight;
   }
 
   private setPanelDropHighlight(active: boolean): void {
@@ -715,208 +633,20 @@ export class DrivePanelView extends ItemView {
     this.dropHintEl.addClass("is-visible");
   }
 
-  private setUploadPill(done: number, total: number, targetName: string): void {
-    this.setDropHint(`Uploading ${done}/${total} → "${targetName}"`);
-  }
-
   private openPanelDropConfirmModal(
     entries: FileSystemEntry[],
     files: File[],
     target: DrivePanelLocation,
     targetBreadcrumb: string,
+    onConfirm: () => void,
   ): void {
     new PanelDropConfirmModal(this.app, {
       entries,
       files,
       targetBreadcrumb,
       targetName: target.name,
-      onConfirm: () => this.startPanelDropUpload(entries, files, target),
+      onConfirm,
     }).open();
-  }
-
-  private async uploadPanelDroppedFiles(
-    files: File[],
-    target: DrivePanelLocation,
-    skippedJunk: number,
-  ): Promise<void> {
-    this.panelDropInFlight = true;
-    this.contentEl.addClass("is-uploading");
-
-    const stats: PanelDropUploadStats = {
-      uploaded: 0,
-      skippedDuplicates: 0,
-      skippedJunk,
-      failed: 0,
-      failedNames: [],
-    };
-    const progress = new Notice(formatPanelUploadProgress(0, files.length, target.name, stats), 0);
-
-    try {
-      for (let index = 0; index < files.length; index += 1) {
-        const file = files[index];
-        this.setUploadPill(index + 1, files.length, target.name);
-        progress.setMessage(formatPanelUploadProgress(index + 1, files.length, target.name, stats, file.name));
-
-        try {
-          const source = new FileUploadSource(file);
-          const md5 = await computeMd5HexFromSource(source);
-          const duplicate = await this.findPanelDropDuplicate(md5, file.name);
-
-          if (duplicate) {
-            stats.skippedDuplicates += 1;
-            progress.setMessage(formatPanelUploadProgress(index + 1, files.length, target.name, stats));
-            continue;
-          }
-
-          await this.upload.uploadFile({
-            name: file.name,
-            mimeType: file.type || "application/octet-stream",
-            source,
-            parentFolderId: target.id,
-            allowRootFallback: false,
-          });
-          stats.uploaded += 1;
-        } catch (error) {
-          stats.failed += 1;
-          stats.failedNames.push(file.name);
-          console.warn("[Drive Attachments] Drive panel upload failed.", error);
-        }
-
-        progress.setMessage(formatPanelUploadProgress(index + 1, files.length, target.name, stats));
-      }
-
-      if (this.currentLocation.id === target.id) {
-        await this.data.loadCurrentFolder(true);
-      } else {
-        this.data.invalidate(target.id);
-      }
-    } finally {
-      progress.hide();
-      this.panelDropInFlight = false;
-      this.contentEl.removeClass("is-uploading");
-      this.setDropHint(null);
-    }
-
-    new Notice(formatPanelUploadSummary(target.name, stats), stats.failed > 0 ? 10_000 : 5_000);
-  }
-
-  // Folder drop (Phase B): recreate the dropped directory tree under `target`, then upload each file
-  // into its recreated folder. Faithful recreation is the goal here — unlike the flat path, nested
-  // files are NOT md5-deduped, because skipping a duplicate would punch a hole in the recreated tree
-  // (and Drive folder creation isn't deduped either, so a re-drop already yields a fresh copy).
-  private async uploadPanelDroppedTree(entries: FileSystemEntry[], target: DrivePanelLocation): Promise<void> {
-    this.panelDropInFlight = true;
-    this.contentEl.addClass("is-uploading");
-
-    const progress = new Notice(`Reading dropped folder for ${target.name}…`, 0);
-    this.setDropHint(`Reading "${target.name}"…`);
-    const stats: PanelDropUploadStats = {
-      uploaded: 0,
-      skippedDuplicates: 0,
-      skippedJunk: 0,
-      failed: 0,
-      failedNames: [],
-    };
-    let foldersCreated = 0;
-    let summary: string | null = null;
-
-    try {
-      let plan: FolderUploadPlan;
-      try {
-        plan = await walkDropEntries(entries);
-      } catch (error) {
-        console.warn("[Drive Attachments] Could not read the dropped folder tree.", error);
-        summary = "Could not read the dropped folder. Try dropping it again.";
-        return;
-      }
-      stats.skippedJunk = plan.skippedJunk;
-
-      if (plan.files.length === 0 && plan.dirs.length === 0) {
-        const junkNote = stats.skippedJunk > 0 ? ` (skipped ${formatCount(stats.skippedJunk, "junk file")})` : "";
-        summary = `Nothing to upload from the dropped folder${junkNote}.`;
-        return;
-      }
-
-      // Memoized, parent-first folder creation. The key is the relative dir path joined by "/"; ""
-      // maps to the drop target itself so root-level loose files upload straight into it.
-      const folderIdByPath = new Map<string, string>([["", target.id]]);
-      const ensureFolder = async (dir: string[]): Promise<string> => {
-        const key = dir.join("/");
-        const existing = folderIdByPath.get(key);
-        if (existing !== undefined) {
-          return existing;
-        }
-        const parentId = await ensureFolder(dir.slice(0, -1));
-        const id = await this.upload.createFolder(dir[dir.length - 1], parentId);
-        foldersCreated += 1;
-        folderIdByPath.set(key, id);
-        return id;
-      };
-
-      // Recreate the directory tree first (shallow folders before deep ones) so even empty folders
-      // appear. A folder we can't create is non-fatal here — the per-file loop records the files it
-      // blocks via the same ensureFolder call.
-      for (const dir of sortDirsByDepth(plan.dirs)) {
-        try {
-          await ensureFolder(dir);
-        } catch (error) {
-          console.warn("[Drive Attachments] Could not create a Drive folder for the dropped tree.", error);
-        }
-      }
-
-      const total = plan.files.length;
-      for (let index = 0; index < total; index += 1) {
-        const { file, dir } = plan.files[index];
-        const displayPath = dir.length > 0 ? `${dir.join("/")}/${file.name}` : file.name;
-        this.setUploadPill(index + 1, total, target.name);
-        progress.setMessage(formatTreeUploadProgress(index + 1, total, target.name, displayPath, foldersCreated, stats));
-
-        try {
-          const parentId = await ensureFolder(dir);
-          await this.upload.uploadFile({
-            name: file.name,
-            mimeType: file.type || "application/octet-stream",
-            source: new FileUploadSource(file),
-            parentFolderId: parentId,
-            allowRootFallback: false,
-          });
-          stats.uploaded += 1;
-        } catch (error) {
-          stats.failed += 1;
-          stats.failedNames.push(displayPath);
-          console.warn("[Drive Attachments] Drive panel folder upload failed.", error);
-        }
-
-        progress.setMessage(formatTreeUploadProgress(index + 1, total, target.name, displayPath, foldersCreated, stats));
-      }
-
-      if (this.currentLocation.id === target.id) {
-        await this.data.loadCurrentFolder(true);
-      } else {
-        this.data.invalidate(target.id);
-      }
-
-      summary = formatTreeUploadSummary(target.name, foldersCreated, stats);
-    } finally {
-      progress.hide();
-      this.panelDropInFlight = false;
-      this.contentEl.removeClass("is-uploading");
-      this.setDropHint(null);
-      if (summary) {
-        new Notice(summary, stats.failed > 0 ? 10_000 : 5_000);
-      }
-    }
-  }
-
-  // Panel drops are Drive-only (no note context), so Direct mode auto-reuses an existing Drive copy
-  // instead of opening the editor-drop dedup modal.
-  private async findPanelDropDuplicate(md5: string, fileName: string): Promise<DriveDedupHit | null> {
-    try {
-      return await this.dedup.findDuplicate({ md5, fileName });
-    } catch (error) {
-      console.warn("[Drive Attachments] Panel upload dedup check failed; proceeding with upload.", error);
-      return null;
-    }
   }
 
   private get currentLocation(): DrivePanelLocation {
@@ -2652,7 +2382,7 @@ export class DrivePanelView extends ItemView {
   }
 
   private canStartPanelManualUpload(): boolean {
-    if (this.panelDropInFlight) {
+    if (this.uploadCtl.inFlight) {
       new Notice("Wait for the current Drive upload to finish before uploading more files.");
       return false;
     }
@@ -2677,7 +2407,7 @@ export class DrivePanelView extends ItemView {
       return;
     }
 
-    void this.uploadPanelDroppedFiles(uploadableFiles, target, skippedJunk);
+    void this.uploadCtl.uploadPanelDroppedFiles(uploadableFiles, target, skippedJunk);
   }
 
   private async createFolderInCurrentLocation(name: string): Promise<void> {
