@@ -121,6 +121,7 @@ import {
 import { DriveUploadService, FileUploadSource } from "./driveUploadService";
 import { DriveFileOpsService } from "./driveFileOpsService";
 import { DriveThumbnailService } from "./driveThumbnailService";
+import { DrivePanelThumbnails } from "./drivePanelThumbnails";
 import {
   DrivePanelLocation,
   isVirtualRootId,
@@ -151,11 +152,6 @@ export const DRIVE_PANEL_VIEW_TYPE = "drive-attachment-bridge-panel";
 interface DrivePanelDetailRecord {
   metadata: DriveMetadata;
   thumbnailUrl: string | null;
-}
-
-interface PanelThumbnailTarget {
-  fileId: string;
-  sourceUrl: string;
 }
 
 
@@ -255,10 +251,8 @@ export class DrivePanelView extends ItemView {
   private focusDetailBarOnRender = false;
   private readonly fileOps: DriveFileOpsService;
   private readonly thumbnails: DriveThumbnailService;
-  private thumbnailObserver: IntersectionObserver | null = null;
-  private readonly thumbnailTargets = new WeakMap<Element, PanelThumbnailTarget>();
-  private readonly thumbnailFailures = new Set<string>();
-  private thumbnailGeneration = 0;
+  // View-side lazy-thumbnail machinery (observer/queue/failures) — see drivePanelThumbnails.ts.
+  private readonly panelThumbnails: DrivePanelThumbnails;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -280,6 +274,7 @@ export class DrivePanelView extends ItemView {
     super(leaf);
     this.fileOps = new DriveFileOpsService(auth);
     this.thumbnails = new DriveThumbnailService(auth);
+    this.panelThumbnails = new DrivePanelThumbnails(this.thumbnails, () => this.contentEl);
   }
 
   getViewType(): string {
@@ -317,11 +312,7 @@ export class DrivePanelView extends ItemView {
     this.contentEl.removeClass("is-uploading");
     this.panelWriteInFlight = false;
     this.internalDrag = null;
-    this.thumbnailObserver?.disconnect();
-    this.thumbnailObserver = null;
-    this.thumbnailGeneration += 1;
-    this.thumbnailFailures.clear();
-    this.thumbnails.clear();
+    this.panelThumbnails.reset();
   }
 
   // Re-paint the panel using cached folder data (no Drive refetch) — e.g. after the custom icon pack
@@ -937,7 +928,7 @@ export class DrivePanelView extends ItemView {
     if (force) {
       // A refresh is the explicit retry path for thumbnails that previously failed (offline, stale
       // link, expired grant). Successful cached thumbnails remain and self-invalidate if their URL changes.
-      this.thumbnailFailures.clear();
+      this.panelThumbnails.clearFailures();
     }
 
     if (!this.canBrowse()) {
@@ -1104,7 +1095,7 @@ export class DrivePanelView extends ItemView {
     this.scrollActiveIntoView = false;
     this.focusDetailBarOnRender = false;
 
-    this.thumbnailObserver?.disconnect();
+    this.panelThumbnails.disconnectObserver();
     contentEl.empty();
     contentEl.addClass("gdab-drive-panel");
     this.applyThemeClass();
@@ -1881,7 +1872,7 @@ export class DrivePanelView extends ItemView {
     } else if (item.thumbnailLink && this.getSettings().panelViewMode === "grid") {
       // Thumbnails are a GRID-view affordance only — list/compact keep the type icon (kdr: thumbnails
       // were leaking into list/compact). renderFileIcon already drew the icon above; only grid swaps it.
-      this.renderPanelThumbnail(icon, item.id, item.thumbnailLink);
+      this.panelThumbnails.renderInto(icon, item.id, item.thumbnailLink);
     }
 
     const main = row.createDiv({ cls: "gdab-drive-panel-row-main" });
@@ -3862,7 +3853,7 @@ export class DrivePanelView extends ItemView {
       this.render();
       return;
     }
-    this.thumbnailObserver?.disconnect();
+    this.panelThumbnails.disconnectObserver();
     list.empty();
     list.removeAttribute("aria-activedescendant");
     this.detailBarEl?.remove();
@@ -4172,89 +4163,6 @@ export class DrivePanelView extends ItemView {
     this.searchLocation = "current-folder";
     return wasActive;
   }
-
-  // Drive thumbnail URLs require OAuth and therefore cannot be assigned directly to <img>. Keep the
-  // type icon visible as the stable fallback, observe only rows near the viewport, then swap in the
-  // authenticated data URL when its bytes arrive.
-  private renderPanelThumbnail(icon: HTMLElement, fileId: string, sourceUrl: string): void {
-    icon.addClass("has-thumbnail-source");
-    icon.dataset.thumbnailId = fileId;
-    this.thumbnailTargets.set(icon, { fileId, sourceUrl });
-
-    const cached = this.thumbnails.getCached(fileId, sourceUrl);
-    if (cached) {
-      this.showPanelThumbnail(icon, cached);
-      return;
-    }
-    if (this.thumbnailFailures.has(fileId)) {
-      return;
-    }
-
-    this.getThumbnailObserver().observe(icon);
-  }
-
-  private getThumbnailObserver(): IntersectionObserver {
-    if (this.thumbnailObserver) {
-      return this.thumbnailObserver;
-    }
-    this.thumbnailObserver = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) {
-            continue;
-          }
-          this.thumbnailObserver?.unobserve(entry.target);
-          const target = this.thumbnailTargets.get(entry.target);
-          if (target) {
-            void this.loadPanelThumbnail(target.fileId, target.sourceUrl);
-          }
-        }
-      },
-      { root: this.contentEl, rootMargin: "96px" },
-    );
-    return this.thumbnailObserver;
-  }
-
-  private async loadPanelThumbnail(fileId: string, sourceUrl: string): Promise<void> {
-    const generation = this.thumbnailGeneration;
-    try {
-      const dataUrl = await this.thumbnails.getDataUrl(fileId, sourceUrl);
-      if (generation !== this.thumbnailGeneration) {
-        return;
-      }
-      this.contentEl.querySelectorAll<HTMLElement>(".gdab-drive-panel-row-icon").forEach((element) => {
-        const target = this.thumbnailTargets.get(element);
-        if (target?.fileId === fileId && target.sourceUrl === sourceUrl) {
-          this.showPanelThumbnail(element, dataUrl);
-        }
-      });
-    } catch (error) {
-      this.thumbnailFailures.add(fileId);
-      console.warn("[Drive Attachments] Drive panel thumbnail failed; keeping the type icon.", error);
-    }
-  }
-
-  private showPanelThumbnail(icon: HTMLElement, dataUrl: string): void {
-    if (icon.querySelector(".gdab-drive-panel-row-thumbnail")) {
-      return;
-    }
-    const image = icon.createEl("img", {
-      cls: "gdab-drive-panel-row-thumbnail",
-      attr: { alt: "", draggable: "false" },
-    });
-    image.addEventListener("load", () => icon.addClass("is-thumbnail-ready"), { once: true });
-    image.addEventListener("error", () => {
-      image.remove();
-      icon.removeClass("is-thumbnail-ready");
-      const target = this.thumbnailTargets.get(icon);
-      if (target) {
-        this.thumbnails.invalidate(target.fileId);
-        this.thumbnailFailures.add(target.fileId);
-      }
-    }, { once: true });
-    image.src = dataUrl;
-  }
-
   // Drive-wide search and view controls. render() mounts this above the breadcrumbs, matching Drive.
   private renderPanelToolbar(contentEl: HTMLElement): HTMLInputElement {
     const bar = contentEl.createDiv({ cls: "gdab-drive-panel-toolbar" });
