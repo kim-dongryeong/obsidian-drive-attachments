@@ -296,8 +296,8 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
       )
       .addDropdown((dropdown) => {
         dropdown
-          .addOption("confirm", "Confirm before uploading (default)")
-          .addOption("direct", "Upload immediately")
+          .addOption("confirm", "Confirm before uploading")
+          .addOption("direct", "Upload immediately (default)")
           .addOption("off", "Off")
           .setValue(this.plugin.settings.panelDropUpload)
           .onChange(async (value) => {

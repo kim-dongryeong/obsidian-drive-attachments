@@ -7,6 +7,7 @@ import {
   Notice,
   Scope,
   setIcon,
+  setTooltip,
   TFile,
   WorkspaceLeaf,
 } from "obsidian";
@@ -1477,26 +1478,26 @@ export class DrivePanelView extends ItemView {
     );
     if (isFolder) {
       // Tint the folder icon to match its Drive "Change color" choice (drive.google.com parity).
-      const color = folderColorHex(item.folderColorRgb);
-      if (color) {
-        // Custom-pack <img> and bundled-theme SVGs carry their own baked colors, so a CSS tint
-        // can't reach them directly (kdr QA: color changed on drive.google.com but not in the
-        // panel). Keep the PACK's folder silhouette for visual consistency with uncolored folders
-        // (kdr QA round 2: glyph vs pack img looked mixed) by using the pack image as a CSS mask
-        // filled with the Drive color. Only without pack art fall back to a tinted Lucide glyph.
-        const packSrc = this.customIconSrc?.(item.mimeType, item.name);
-        icon.empty();
-        if (packSrc) {
-          const tinted = icon.createSpan({ cls: "gdab-folder-tint-mask", attr: { "aria-hidden": "true" } });
-          tinted.style.setProperty("--gdab-folder-mask", `url("${packSrc}")`);
-          tinted.style.backgroundColor = color;
-        } else {
-          // folder-closed = folder silhouette + an inner horizontal line; the CSS strokes only that
-          // line in the background color, so the flap edge shows without outlining the whole glyph.
-          setIcon(icon, "folder-closed");
-          icon.style.color = color;
-          icon.addClass("is-folder-colored");
-        }
+      // EVERY folder goes through the same mask+fill pipeline: the API sends folderColorRgb for
+      // listed folders (default gray #8f8f8f included), but search-index hits omit the field —
+      // rendering those as the raw pack image made the same folder gray in browsing and the pack's
+      // own color in search results (kdr QA). Missing value = Drive's default gray.
+      const color = folderColorHex(item.folderColorRgb) ?? "#8f8f8f";
+      // Custom-pack <img> and bundled-theme SVGs carry their own baked colors, so a CSS tint
+      // can't reach them directly. Keep the PACK's folder silhouette by using the pack image as a
+      // CSS mask filled with the Drive color; only without pack art fall back to a tinted glyph.
+      const packSrc = this.customIconSrc?.(item.mimeType, item.name);
+      icon.empty();
+      if (packSrc) {
+        const tinted = icon.createSpan({ cls: "gdab-folder-tint-mask", attr: { "aria-hidden": "true" } });
+        tinted.style.setProperty("--gdab-folder-mask", `url("${packSrc}")`);
+        tinted.style.backgroundColor = color;
+      } else {
+        // folder-closed = folder silhouette + an inner horizontal line; the CSS strokes only that
+        // line in the background color, so the flap edge shows without outlining the whole glyph.
+        setIcon(icon, "folder-closed");
+        icon.style.color = color;
+        icon.addClass("is-folder-colored");
       }
     } else if (item.thumbnailLink && this.getSettings().panelViewMode === "grid") {
       // Thumbnails are a GRID-view affordance only — list/compact keep the type icon (kdr: thumbnails
@@ -4026,7 +4027,10 @@ export class DrivePanelView extends ItemView {
         // shared-drive items, so My Drive trash approximates with the modified date. (A fragment
         // title renders flattened into one line inside Menu, so a tooltip is the reliable spot.)
         const dom = (mi as unknown as { dom?: HTMLElement }).dom;
-        dom?.setAttribute("title", "My Drive items sort by modified date — the Drive API only provides a trashed time for shared-drive items.");
+        if (dom) {
+          // Obsidian's setTooltip — a bare title= attribute never shows inside its menus.
+          setTooltip(dom, "My Drive items sort by modified date — the Drive API only provides a trashed time for shared-drive items.", { placement: "right" });
+        }
       });
     }
     const driveKeys: Array<{ key: PanelSortKey; label: string; icon: string }> = [
