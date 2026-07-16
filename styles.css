@@ -15,7 +15,7 @@
 .gdab-drive-search-result {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: 4px;
 }
 
 .gdab-drive-search-result-main {

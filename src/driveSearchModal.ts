@@ -488,9 +488,17 @@ export class DriveSearchModal extends FuzzySuggestModal<DriveIndexItem> {
       }
     ).chooser;
     const previous = typeof chooser?.selectedItem === "number" ? chooser.selectedItem : 0;
+    // A re-render also rebuilds the scrollable results container from scratch, snapping it back to
+    // the top — infuriating when the user has mouse-scrolled partway down while the index streams.
+    // Capture the scroll offset and put it back after the repaint (the arrow-key path is already
+    // covered by userNavigated above; this covers passive scroll-and-read).
+    const prevScrollTop = this.resultContainerEl?.scrollTop ?? 0;
     this.inputEl.dispatchEvent(new Event("input"));
     if (previous > 0 && chooser?.setSelectedItem && Array.isArray(chooser.suggestions) && chooser.suggestions.length > 0) {
       chooser.setSelectedItem(Math.min(previous, chooser.suggestions.length - 1));
+    }
+    if (prevScrollTop > 0 && this.resultContainerEl) {
+      this.resultContainerEl.scrollTop = prevScrollTop;
     }
   }
 
