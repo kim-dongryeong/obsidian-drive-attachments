@@ -669,6 +669,12 @@ export class DrivePanelView extends ItemView {
       cls: "gdab-drive-panel-upload-card-progress",
       text: state.currentFile ? `${state.done}/${state.total} · ${state.currentFile}` : `${state.done}/${state.total}`,
     });
+    if (state.queued > 0) {
+      card.createDiv({
+        cls: "gdab-drive-panel-upload-card-queued",
+        text: `${state.queued} ${state.queued === 1 ? "batch" : "batches"} queued — uploads next`,
+      });
+    }
     const barWrap = card.createDiv({ cls: "gdab-drive-panel-upload-card-bar" });
     const fill = barWrap.createDiv({ cls: "gdab-drive-panel-upload-card-bar-fill" });
     fill.style.width = `${state.total > 0 ? Math.round(((state.done - 1) / state.total) * 100) : 0}%`;

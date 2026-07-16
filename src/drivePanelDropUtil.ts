@@ -141,9 +141,9 @@ export function formatTreeUploadSummary(targetName: string, foldersCreated: numb
     `${formatCount(stats.uploaded, "file")} uploaded to ${targetName}`,
     `${formatCount(foldersCreated, "folder")} created`,
   ];
-  if (stats.skippedJunk > 0) {
-    parts.push(`${formatCount(stats.skippedJunk, "junk file")} skipped`);
-  }
+  // OS sidecar files (.DS_Store / Thumbs.db) are skipped SILENTLY — drive.google.com never
+  // mentions them either, and the note just confused kdr ("1 junk file?"). skippedJunk stays in
+  // the stats for internal accounting only.
   if (stats.failed > 0) {
     const failedNames = stats.failedNames.slice(0, 3).join(", ");
     const extra = stats.failedNames.length > 3 ? `, +${stats.failedNames.length - 3} more` : "";
@@ -188,13 +188,11 @@ export function formatPanelUploadProgress(
 }
 
 export function formatPanelUploadSummary(targetName: string, stats: PanelDropUploadStats): string {
-  const parts = [
-    `${formatCount(stats.uploaded, "file")} uploaded to ${targetName}`,
-    `${formatCount(stats.skippedDuplicates, "duplicate")} skipped`,
-  ];
-  if (stats.skippedJunk > 0) {
-    parts.push(`${formatCount(stats.skippedJunk, "junk file")} skipped`);
+  const parts = [`${formatCount(stats.uploaded, "file")} uploaded to ${targetName}`];
+  if (stats.skippedDuplicates > 0) {
+    parts.push(`${formatCount(stats.skippedDuplicates, "duplicate")} skipped`);
   }
+  // Junk sidecars (.DS_Store / Thumbs.db) skip silently — see formatTreeUploadSummary.
   if (stats.failed > 0) {
     const failedNames = stats.failedNames.slice(0, 3).join(", ");
     const extra = stats.failedNames.length > 3 ? `, +${stats.failedNames.length - 3} more` : "";

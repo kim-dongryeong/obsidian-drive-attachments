@@ -53,6 +53,8 @@ export interface PanelUploadCardState {
   total: number;
   currentFile: string | null;
   cancellable: boolean;
+  // Batches waiting behind the running one (drops made mid-upload).
+  queued: number;
 }
 
 // The Drive panel's drag-and-drop upload workflow: the drop router (off/confirm/direct), the flat
@@ -69,6 +71,8 @@ export class DrivePanelUploadController {
   // Drops made while an upload runs wait here and start in order when the current batch finishes
   // (drive.google.com queues uploads instead of rejecting them).
   private readonly queue: Array<{ entries: FileSystemEntry[]; files: File[]; target: DrivePanelLocation }> = [];
+  // Last card state pushed to the view — re-rendered when the queue changes mid-upload.
+  private lastCardState: PanelUploadCardState | null = null;
 
   constructor(
     private readonly upload: DriveUploadService,
@@ -127,9 +131,12 @@ export class DrivePanelUploadController {
   startPanelDropUpload(entries: FileSystemEntry[], files: File[], target: DrivePanelLocation): void {
     if (this.inFlight) {
       // Queue instead of rejecting (drive.google.com behavior): this batch starts when the
-      // running one finishes.
+      // running one finishes. Shown inside the in-panel card — no top-right Notice (kdr: those
+      // vanish too fast and add noise).
       this.queue.push({ entries, files, target });
-      new Notice(`Queued for upload to ${target.name} — starts after the current upload.`);
+      if (this.lastCardState) {
+        this.showCard({ ...this.lastCardState });
+      }
       return;
     }
     if (!this.canStartPanelDropUpload()) {
@@ -205,7 +212,12 @@ export class DrivePanelUploadController {
   }
 
   private setUploadPill(done: number, total: number, targetName: string, currentFile: string | null): void {
-    this.host.showUploadCard({ targetName, done, total, currentFile, cancellable: true });
+    this.showCard({ targetName, done, total, currentFile, cancellable: true, queued: 0 });
+  }
+
+  private showCard(state: PanelUploadCardState | null): void {
+    this.lastCardState = state ? { ...state, queued: this.queue.length } : null;
+    this.host.showUploadCard(this.lastCardState);
   }
 
   // Public: the toolbar "Upload files..." picker reuses this flat path for manually chosen files.
@@ -270,7 +282,7 @@ export class DrivePanelUploadController {
       progress.hide();
       this.inFlight = false;
       this.host.setUploadingUi(false);
-      this.host.showUploadCard(null);
+      this.showCard(null);
       this.host.setDropHint(null);
     }
 
@@ -397,7 +409,7 @@ export class DrivePanelUploadController {
       progress.hide();
       this.inFlight = false;
       this.host.setUploadingUi(false);
-      this.host.showUploadCard(null);
+      this.showCard(null);
       this.host.setDropHint(null);
       if (summary) {
         new Notice(summary, stats.failed > 0 ? 10_000 : 5_000);

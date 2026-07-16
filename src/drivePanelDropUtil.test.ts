@@ -48,9 +48,9 @@ describe("formatTreeUploadProgress", () => {
 });
 
 describe("formatTreeUploadSummary", () => {
-  it("includes junk-skipped when present", () => {
+  it("skips junk silently (drive.google.com parity)", () => {
     expect(formatTreeUploadSummary("Work", 2, stats({ uploaded: 5, skippedJunk: 1 }))).toBe(
-      "Drive panel folder upload complete: 5 files uploaded to Work; 2 folders created; 1 junk file skipped.",
+      "Drive panel folder upload complete: 5 files uploaded to Work; 2 folders created.",
     );
   });
 
@@ -78,9 +78,12 @@ describe("formatPanelUploadProgress", () => {
 });
 
 describe("formatPanelUploadSummary", () => {
-  it("reports uploaded and duplicates skipped", () => {
+  it("reports uploaded, mentions duplicates only when present", () => {
     expect(formatPanelUploadSummary("Work", stats({ uploaded: 2, skippedDuplicates: 1 }))).toBe(
       "Drive panel upload complete: 2 files uploaded to Work; 1 duplicate skipped.",
+    );
+    expect(formatPanelUploadSummary("Work", stats({ uploaded: 2 }))).toBe(
+      "Drive panel upload complete: 2 files uploaded to Work.",
     );
   });
 });

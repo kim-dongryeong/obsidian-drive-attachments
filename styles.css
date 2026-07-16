@@ -3220,6 +3220,11 @@
   white-space: nowrap;
 }
 
+.gdab-drive-panel-upload-card-queued {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .gdab-drive-panel-upload-card-bar {
   height: 4px;
   margin: 6px 0;
