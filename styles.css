@@ -2951,7 +2951,7 @@
 
 .gdab-drive-panel-row-meta {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
   color: var(--gdab-text-muted, var(--text-muted));
   font-size: var(--font-ui-smaller);
@@ -2960,6 +2960,22 @@
 
 .gdab-drive-panel-row-detail {
   color: var(--gdab-text-muted, var(--text-muted));
+}
+
+/* Search hits: the item's Drive folder path, right-aligned on the SAME meta line (no extra row).
+   direction:rtl puts the ellipsis at the START, keeping the nearest (rightmost) folders visible;
+   the LRM-safe plaintext bidi keeps latin text reading normally. */
+.gdab-drive-panel-row-path {
+  margin-left: auto;
+  min-width: 0;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  unicode-bidi: plaintext;
+  text-align: right;
+  color: var(--gdab-text-faint, var(--text-faint));
 }
 
 /* Per-row actions: hover/focus-revealed like Obsidian's native file-explorer affordances. The

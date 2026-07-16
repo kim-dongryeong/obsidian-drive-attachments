@@ -1540,6 +1540,16 @@ export class DrivePanelView extends ItemView {
     if (details) {
       meta.createSpan({ cls: "gdab-drive-panel-row-detail", text: details });
     }
+    if (this.searchCtl.isDriveSearchActive() && item.path) {
+      // Search hits show WHERE they live, tucked onto the right end of the existing meta line (no
+      // extra row — kdr). Long paths ellipsize at the START so the nearest folders stay readable;
+      // hover reveals the full path.
+      meta.createSpan({
+        cls: "gdab-drive-panel-row-path",
+        text: item.path,
+        attr: { title: item.path },
+      });
+    }
 
     // One compact "⋮" overflow button instead of a row of icons — in a narrow sidebar the icons ate the
     // filename's width. The full action set lives in the menu (files and folders share it). The row
