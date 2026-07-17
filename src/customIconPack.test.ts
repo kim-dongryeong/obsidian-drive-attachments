@@ -14,6 +14,8 @@ function fakeAdapter(files: Record<string, string>): DataAdapter {
       if (!(path in files)) throw new Error("missing");
       return files[path];
     },
+    stat: async (path: string) =>
+      path in files ? { type: "file", ctime: 0, mtime: 0, size: files[path].length } : null,
     getResourcePath: (path: string) => `res:${path}`,
   } as unknown as DataAdapter;
 }
@@ -59,6 +61,15 @@ describe("CustomIconPackService resolution order", () => {
     });
     expect(pack.customIconImgSrc("video/mp4", "clip.mp4")).toBe("res:icons/video.png");
     expect(pack.customIconImgSrc("audio/mpeg", "song.mp3")).toBe("res:icons/audio.svg");
+  });
+
+  it("ignores oversized icon files (render-perf guard)", async () => {
+    const pack = await loadPack({
+      "icons/audio.svg": "x".repeat(3 * 1024 * 1024),
+      "icons/video.svg": "<svg/>",
+    });
+    expect(pack.customIconImgSrc("audio/mpeg", "song.mp3")).toBeNull();
+    expect(pack.customIconImgSrc("video/mp4", "clip.mp4")).toBe("res:icons/video.svg");
   });
 
   it("folders use the folder icon; unknown types return null", async () => {

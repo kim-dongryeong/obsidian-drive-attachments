@@ -10,6 +10,8 @@ export interface CustomIconPackExportResult {
   path: string;
   iconCount: number;
   mapCount: number;
+  // Icons left out of the JSON because they exceed PACK_ICON_MAX_BYTES.
+  skippedTooLarge: number;
 }
 
 export interface CustomIconPackImportResult {
@@ -18,6 +20,17 @@ export interface CustomIconPackImportResult {
   mapCount: number;
   skipped: number;
 }
+
+// icons.json format version. Bump when the export shape changes incompatibly; importFromJson must
+// keep reading every schema <= CURRENT forever (old exports stay importable), and must REFUSE
+// schema > CURRENT (a file from a newer plugin) with a clear "update the plugin" error instead of
+// silently mis-importing.
+export const ICON_PACK_SCHEMA = 1;
+
+// Per-icon size cap, enforced at BOTH load and export. Icons render at ~16-20px, so anything this
+// large is a mistake (a wallpaper dropped into the pack folder) — unbounded files would slow every
+// row paint and balloon icons.json via base64.
+export const PACK_ICON_MAX_BYTES = 2 * 1024 * 1024;
 
 // Icon image formats the pack folder accepts, in PRIORITY order — when the same icon name exists
 // in several formats, the earlier format wins (svg scales best).
@@ -67,6 +80,13 @@ export class CustomIconPackService {
         }
         const iconName = fileName.slice(0, dot).trim();
         if (!iconName) {
+          continue;
+        }
+        const stat = await this.adapter.stat(filePath);
+        if (stat && stat.size > PACK_ICON_MAX_BYTES) {
+          console.warn(
+            `[Drive Attachments] Ignoring oversized icon (> ${Math.round(PACK_ICON_MAX_BYTES / 1024 / 1024)} MiB): ${filePath}`,
+          );
           continue;
         }
         const existing = picked.get(iconName);
@@ -149,6 +169,7 @@ export class CustomIconPackService {
       })
       .sort((a, b) => a.localeCompare(b));
 
+    let skippedTooLarge = 0;
     for (const filePath of iconPaths) {
       const lower = basename(filePath).toLowerCase();
       const dot = lower.lastIndexOf(".");
@@ -156,6 +177,11 @@ export class CustomIconPackService {
       const format = lower.slice(dot + 1);
       const rank = (PACK_ICON_FORMATS as readonly string[]).indexOf(format);
       if (!iconName || (iconName in iconRank && iconRank[iconName] <= rank)) {
+        continue;
+      }
+      const stat = await this.adapter.stat(filePath);
+      if (stat && stat.size > PACK_ICON_MAX_BYTES) {
+        skippedTooLarge++;
         continue;
       }
       iconRank[iconName] = rank;
@@ -170,8 +196,11 @@ export class CustomIconPackService {
     const mapPath = listed.files.find((filePath) => basename(filePath).toLowerCase() === "map.json");
     const map = mapPath ? await this.readMapJson(mapPath) : {};
     const exportPath = joinVaultPath(folderPath, "icons.json");
-    await this.adapter.write(exportPath, JSON.stringify({ name: basename(folderPath), icons, map }, null, 2) + "\n");
-    return { path: exportPath, iconCount: Object.keys(icons).length, mapCount: Object.keys(map).length };
+    await this.adapter.write(
+      exportPath,
+      JSON.stringify({ schema: ICON_PACK_SCHEMA, name: basename(folderPath), icons, map }, null, 2) + "\n",
+    );
+    return { path: exportPath, iconCount: Object.keys(icons).length, mapCount: Object.keys(map).length, skippedTooLarge };
   }
 
   // Inverse of exportToJson: read `<folder>/icons.json` and materialize the same folder layout
@@ -203,12 +232,27 @@ export class CustomIconPackService {
     }
     const root = parsed as Record<string, unknown>;
 
+    // Schema gate: legacy exports carry no schema (treated as 1). A HIGHER schema means the file
+    // came from a newer plugin whose format this build doesn't understand — refuse loudly rather
+    // than import a subset that looks complete.
+    const schema = typeof root.schema === "number" ? root.schema : 1;
+    if (schema > ICON_PACK_SCHEMA) {
+      throw new Error(
+        `This icons.json uses format v${schema}, newer than this plugin understands (v${ICON_PACK_SCHEMA}). Update Drive Attachments, then import again.`,
+      );
+    }
+
     const icons = isRecord(root.icons) ? (root.icons as Record<string, unknown>) : {};
     let iconCount = 0;
     let skipped = 0;
     for (const [rawName, rawValue] of Object.entries(icons)) {
       const iconName = sanitizeIconName(rawName);
       if (!iconName || typeof rawValue !== "string" || !rawValue.trim()) {
+        skipped++;
+        continue;
+      }
+      if (rawValue.length > PACK_ICON_MAX_BYTES * 1.4) {
+        // base64 is ~1.33x the bytes; anything past the cap (with margin) is skipped like reload does.
         skipped++;
         continue;
       }
