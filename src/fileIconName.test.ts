@@ -12,9 +12,15 @@ describe("fileIconName", () => {
     expect(fileIconName("video/ogg", "sample.ogv")).toBe("video");
   });
 
-  it("extension wins over mime, mime fills the gaps", () => {
-    expect(fileIconName("application/octet-stream", "movie.mkv")).toBe("video");
-    expect(fileIconName("audio/mpeg", "no-extension")).toBe("audio");
+  it("a specific mime (Google's judgment) outranks the extension table", () => {
+    // Even if our table were wrong about an extension, a concrete audio/video/image mime wins.
+    expect(fileIconName("audio/ogg", "weird.mkv")).toBe("audio");
     expect(fileIconName("application/vnd.google-apps.folder", "docs")).toBe("folder");
+  });
+
+  it("generic mimes defer to the extension table", () => {
+    expect(fileIconName("application/octet-stream", "movie.mkv")).toBe("video");
+    expect(fileIconName("text/x-python", "script.py")).toBe("code");
+    expect(fileIconName("audio/mpeg", "no-extension")).toBe("audio");
   });
 });

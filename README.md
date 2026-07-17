@@ -137,10 +137,34 @@ Already have a vault full of attachments? The migration tool moves them to Drive
 ## 8. Icons & theming
 
 - **File-type icons** for a wide range of formats, with multiple bundled icon themes
-- **Custom icon packs** — drop your own SVGs into a folder and the plugin picks them up live
+- **Custom icon packs** — drop your own icons into a folder and the plugin picks them up live
 - **Panel themes** — restyle the Drive panel (default, Notion-like, Drive-like, macOS-like, and more)
 
 ![Icon themes and custom icon packs](docs/media/icons-themes.png)
+
+### Building a custom icon pack
+
+Point *Settings → Icons → Custom icon pack folder* at any vault folder and drop icon files in
+(`svg`, `png`, `webp`, `gif`, or `ico` — svg wins when the same name exists twice). **The file
+name is the mapping** — no configuration needed:
+
+```
+my-icons/
+├─ mp3.svg      ← every .mp3 file uses this (extension-named = highest priority)
+├─ audio.svg    ← every other audio file (category fallback)
+├─ video.png
+└─ map.json     ← optional aliases: { "map": { "aac": "mp3" } } = .aac also uses mp3.svg
+```
+
+Resolution order per file: an icon named after its **extension** → a `map.json` alias → the
+**category** icon (`folder`, `audio`, `video`, `photo`, `docx`, `xlsx`, `pptx`, `pdf`, `zip`,
+`archive`, `code`, `txt`, …), where the category comes from Google's own mimeType first and the
+plugin's extension table as fallback. So a Google-Drive-style pack needs only a dozen category
+icons, while a per-format pack can define exactly the extensions it cares about.
+
+**Sharing packs**: *Export icon pack* writes the whole folder (any format, `map.json` included)
+into a single portable `icons.json`; *Import* restores the folder from one. Binary formats travel
+as data URIs inside the JSON.
 
 ---
 

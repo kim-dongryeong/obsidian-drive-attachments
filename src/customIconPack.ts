@@ -1,5 +1,4 @@
 import { DataAdapter, normalizePath } from "obsidian";
-import { FILE_EXTENSION_ICON_NAMES } from "./fileIconMap";
 import { fileIconName } from "./fileIconName";
 import { DEFAULT_CUSTOM_ICON_PACK_FOLDER } from "./settings";
 
@@ -20,9 +19,15 @@ export interface CustomIconPackImportResult {
   skipped: number;
 }
 
+// Icon image formats the pack folder accepts, in PRIORITY order — when the same icon name exists
+// in several formats, the earlier format wins (svg scales best).
+const PACK_ICON_FORMATS = ["svg", "png", "webp", "gif", "ico"] as const;
+
 export class CustomIconPackService {
   private iconFiles = new Map<string, string>();
-  private extToIcon: Record<string, string> = { ...FILE_EXTENSION_ICON_NAMES };
+  // The user's explicit map.json overrides ONLY — kept separate from the built-in extension table
+  // so explicit user intent can outrank the mimeType while our built-in guesses stay below it.
+  private userExtToIcon: Record<string, string> = {};
   private folderPath = "";
 
   constructor(
@@ -40,7 +45,7 @@ export class CustomIconPackService {
     const folderPath = normalizePackFolderPath(this.getFolderPath());
     this.folderPath = folderPath;
     this.iconFiles = new Map();
-    this.extToIcon = { ...FILE_EXTENSION_ICON_NAMES };
+    this.userExtToIcon = {};
 
     if (!folderPath) {
       return;
@@ -48,43 +53,72 @@ export class CustomIconPackService {
 
     try {
       const listed = await this.adapter.list(folderPath);
-      const iconFiles = new Map<string, string>();
+      // name → {path, formatRank}; on a name collision the better (lower-rank) format wins.
+      const picked = new Map<string, { path: string; rank: number }>();
       for (const filePath of listed.files) {
-        const fileName = basename(filePath);
-        if (!fileName.toLowerCase().endsWith(".svg")) {
+        const fileName = basename(filePath).toLowerCase();
+        const dot = fileName.lastIndexOf(".");
+        if (dot <= 0) {
           continue;
         }
-        const iconName = fileName.slice(0, -4).trim().toLowerCase();
-        if (iconName) {
-          iconFiles.set(iconName, filePath);
+        const rank = PACK_ICON_FORMATS.indexOf(fileName.slice(dot + 1) as (typeof PACK_ICON_FORMATS)[number]);
+        if (rank === -1) {
+          continue;
+        }
+        const iconName = fileName.slice(0, dot).trim();
+        if (!iconName) {
+          continue;
+        }
+        const existing = picked.get(iconName);
+        if (!existing || rank < existing.rank) {
+          picked.set(iconName, { path: filePath, rank });
         }
       }
 
       const mapPath = listed.files.find((filePath) => basename(filePath).toLowerCase() === "map.json");
       const userMap = mapPath ? await this.readMapJson(mapPath) : {};
-      this.iconFiles = iconFiles;
-      this.extToIcon = { ...FILE_EXTENSION_ICON_NAMES, ...userMap };
+      this.iconFiles = new Map([...picked.entries()].map(([name, entry]) => [name, entry.path]));
+      this.userExtToIcon = userMap;
     } catch {
       this.iconFiles = new Map();
-      this.extToIcon = { ...FILE_EXTENSION_ICON_NAMES };
+      this.userExtToIcon = {};
     }
   }
 
+  // Resolution order — explicit user intent first, Google's judgment second, our guesses last:
+  //   ① an icon file NAMED after the extension ("mp3.svg" → every .mp3) — zero-config per-ext packs
+  //   ② the user's map.json entry for the extension (aliases: {"aac": "mp3"})
+  //   ③ fileIconName(): Drive's specific mimeType → built-in extension table → generic mime rules,
+  //      resolved to a category-named icon file ("audio.svg").
   customIconImgSrc(mimeType: string, name: string): string | null {
     if (!this.folderPath) {
       return null;
     }
 
-    // Extension first (so a user `map.json` override applies); fall back to the mimeType for files
-    // whose NAME has no usable extension — Drive often stores PDFs/Office docs extensionless, and the
-    // built-in icons detect those by mime, so the custom pack must too (else they'd skip the pack).
-    const iconName = mimeType === "application/vnd.google-apps.folder"
-      ? "folder"
-      : this.extToIcon[getFileExtension(name)] ?? fileIconName(mimeType, name);
-    if (!iconName) {
-      return null;
+    if (mimeType === "application/vnd.google-apps.folder") {
+      return this.iconSrcFor("folder");
     }
 
+    const ext = getFileExtension(name);
+    if (ext) {
+      const direct = this.iconSrcFor(ext);
+      if (direct) {
+        return direct;
+      }
+      const mappedName = this.userExtToIcon[ext];
+      if (mappedName) {
+        const mapped = this.iconSrcFor(mappedName);
+        if (mapped) {
+          return mapped;
+        }
+      }
+    }
+
+    const category = fileIconName(mimeType, name);
+    return category ? this.iconSrcFor(category) : null;
+  }
+
+  private iconSrcFor(iconName: string): string | null {
     const iconPath = this.iconFiles.get(iconName.toLowerCase());
     return iconPath ? this.adapter.getResourcePath(iconPath) : null;
   }
@@ -102,15 +136,34 @@ export class CustomIconPackService {
       throw new Error(`Custom icon pack folder not found: ${folderPath}.`);
     }
 
+    // One JSON regardless of formats: svg values are the raw markup (compact, diffable), binary
+    // formats (png/webp/gif/ico) become data: URIs — the URI's own mime tells import which
+    // extension to restore. Same-name collisions keep the best format, like the loader.
     const icons: Record<string, string> = {};
-    const svgPaths = listed.files
-      .filter((filePath) => basename(filePath).toLowerCase().endsWith(".svg"))
+    const iconRank: Record<string, number> = {};
+    const iconPaths = listed.files
+      .filter((filePath) => {
+        const lower = basename(filePath).toLowerCase();
+        const dot = lower.lastIndexOf(".");
+        return dot > 0 && (PACK_ICON_FORMATS as readonly string[]).includes(lower.slice(dot + 1));
+      })
       .sort((a, b) => a.localeCompare(b));
 
-    for (const filePath of svgPaths) {
-      const iconName = iconNameFromSvgPath(filePath);
-      if (iconName) {
+    for (const filePath of iconPaths) {
+      const lower = basename(filePath).toLowerCase();
+      const dot = lower.lastIndexOf(".");
+      const iconName = lower.slice(0, dot).trim();
+      const format = lower.slice(dot + 1);
+      const rank = (PACK_ICON_FORMATS as readonly string[]).indexOf(format);
+      if (!iconName || (iconName in iconRank && iconRank[iconName] <= rank)) {
+        continue;
+      }
+      iconRank[iconName] = rank;
+      if (format === "svg") {
         icons[iconName] = await this.adapter.read(filePath);
+      } else {
+        const bytes = await this.adapter.readBinary(filePath);
+        icons[iconName] = `data:${PACK_FORMAT_MIME[format]};base64,${arrayBufferToBase64(bytes)}`;
       }
     }
 
@@ -153,13 +206,18 @@ export class CustomIconPackService {
     const icons = isRecord(root.icons) ? (root.icons as Record<string, unknown>) : {};
     let iconCount = 0;
     let skipped = 0;
-    for (const [rawName, rawSvg] of Object.entries(icons)) {
+    for (const [rawName, rawValue] of Object.entries(icons)) {
       const iconName = sanitizeIconName(rawName);
-      if (!iconName || typeof rawSvg !== "string" || !rawSvg.trim()) {
+      if (!iconName || typeof rawValue !== "string" || !rawValue.trim()) {
         skipped++;
         continue;
       }
-      await this.adapter.write(joinVaultPath(folderPath, `${iconName}.svg`), rawSvg);
+      const dataUri = parseIconDataUri(rawValue);
+      if (dataUri) {
+        await this.adapter.writeBinary(joinVaultPath(folderPath, `${iconName}.${dataUri.ext}`), dataUri.bytes);
+      } else {
+        await this.adapter.write(joinVaultPath(folderPath, `${iconName}.svg`), rawValue);
+      }
       iconCount++;
     }
 
@@ -200,8 +258,52 @@ function basename(path: string): string {
   return path.split("/").pop() ?? path;
 }
 
-function iconNameFromSvgPath(path: string): string {
-  return basename(path).slice(0, -4).trim().toLowerCase();
+const PACK_FORMAT_MIME: Record<string, string> = {
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+  ico: "image/x-icon",
+};
+
+const PACK_MIME_EXT: Record<string, string> = {
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/x-icon": "ico",
+  "image/vnd.microsoft.icon": "ico",
+};
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+// icons.json binary values: "data:image/png;base64,...." → bytes + restore extension. Non-data
+// values are treated as raw svg markup (the original export format — stays importable).
+function parseIconDataUri(value: string): { ext: string; bytes: ArrayBuffer } | null {
+  const match = /^data:([a-z0-9.+/-]+);base64,([A-Za-z0-9+/=\s]+)$/i.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+  const ext = PACK_MIME_EXT[match[1].toLowerCase()];
+  if (!ext) {
+    return null;
+  }
+  try {
+    const binary = atob(match[2].replace(/\s+/g, ""));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return { ext, bytes: bytes.buffer };
+  } catch {
+    return null;
+  }
 }
 
 // Turn an icons.json key into a safe `<name>.svg` filename. Reject path separators / parent refs so
