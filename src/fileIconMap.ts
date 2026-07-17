@@ -75,8 +75,14 @@ export const FILE_EXTENSION_ICON_NAMES: Readonly<Record<string, string>> = {
   "odp": "presentation",
   "ods": "spreadsheet",
   "odt": "rtf",
-  "ogg": "video",
+  // .ogg is an audio/video container but in practice almost always audio — drive.google.com
+  // shows it with the audio (headphone) icon, and Drive reports audio/ogg (kdr QA). .ogv is the
+  // explicit video variant, .oga/.opus explicit audio.
+  "oga": "audio",
+  "ogg": "audio",
+  "ogv": "video",
   "one": "one",
+  "opus": "audio",
   "otf": "font",
   "pages": "rtf",
   "pdf": "pdf",
