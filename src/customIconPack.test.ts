@@ -65,7 +65,7 @@ describe("CustomIconPackService resolution order", () => {
 
   it("ignores oversized icon files (render-perf guard)", async () => {
     const pack = await loadPack({
-      "icons/audio.svg": "x".repeat(3 * 1024 * 1024),
+      "icons/audio.svg": "x".repeat(200 * 1024),
       "icons/video.svg": "<svg/>",
     });
     expect(pack.customIconImgSrc("audio/mpeg", "song.mp3")).toBeNull();

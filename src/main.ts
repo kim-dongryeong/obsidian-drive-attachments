@@ -737,7 +737,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
   async exportIconPackToJson(): Promise<void> {
     try {
       const result = await this.customIconPack.exportToJson();
-      const sizeNote = result.skippedTooLarge > 0 ? ` ${result.skippedTooLarge} oversized icon(s) (>2 MiB) were left out.` : "";
+      const sizeNote = result.skippedTooLarge > 0 ? ` ${result.skippedTooLarge} oversized icon(s) (>100 KB) were left out.` : "";
       new Notice(
         `Icon pack exported → ${result.path} (in your vault): ${result.iconCount} icon(s), ${result.mapCount} mapping(s).${sizeNote}`,
         10000,

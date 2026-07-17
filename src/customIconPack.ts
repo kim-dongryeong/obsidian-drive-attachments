@@ -27,10 +27,12 @@ export interface CustomIconPackImportResult {
 // silently mis-importing.
 export const ICON_PACK_SCHEMA = 1;
 
-// Per-icon size cap, enforced at BOTH load and export. Icons render at ~16-20px, so anything this
-// large is a mistake (a wallpaper dropped into the pack folder) — unbounded files would slow every
-// row paint and balloon icons.json via base64.
-export const PACK_ICON_MAX_BYTES = 2 * 1024 * 1024;
+// Per-icon size cap, enforced at load, export, and import. Real icons are tiny — the bundled-style
+// packs average 0.6-2 KB/icon and even 512px PNGs from icon sites or multi-resolution .ico files
+// stay well under this — so 100 KB is a 20-200x margin that still catches actual mistakes (a photo
+// or wallpaper dropped into the pack folder), which would otherwise slow every row paint and
+// balloon icons.json via base64.
+export const PACK_ICON_MAX_BYTES = 100 * 1024;
 
 // Icon image formats the pack folder accepts, in PRIORITY order — when the same icon name exists
 // in several formats, the earlier format wins (svg scales best).
@@ -85,7 +87,7 @@ export class CustomIconPackService {
         const stat = await this.adapter.stat(filePath);
         if (stat && stat.size > PACK_ICON_MAX_BYTES) {
           console.warn(
-            `[Drive Attachments] Ignoring oversized icon (> ${Math.round(PACK_ICON_MAX_BYTES / 1024 / 1024)} MiB): ${filePath}`,
+            `[Drive Attachments] Ignoring oversized icon (> ${Math.round(PACK_ICON_MAX_BYTES / 1024)} KB): ${filePath}`,
           );
           continue;
         }
