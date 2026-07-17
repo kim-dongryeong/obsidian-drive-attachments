@@ -30,7 +30,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref_name }}
         run: |
+          # Publish directly (no --draft): the community directory matches the repo manifest version
+          # against a PUBLISHED release, so a draft leaves a window where the two disagree.
           gh release create "$tag" \
             --title="$tag" \
-            --draft \
+            --latest \
+            --notes "Drive Attachments $tag" \
             main.js manifest.json styles.css
