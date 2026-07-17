@@ -144,7 +144,7 @@ class DriveDedupModal extends Modal {
       text: "Drive path: resolving...",
       cls: "setting-item-description",
     });
-    this.metadata
+    void this.metadata
       .resolveDrivePathByParents(this.hit.parents)
       .catch(() => null)
       .then((path) => {

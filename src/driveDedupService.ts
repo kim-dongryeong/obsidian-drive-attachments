@@ -168,9 +168,9 @@ export class DriveDedupService {
   }
 
   private async waitForIndexLoad(): Promise<"loaded" | "failed" | "timeout"> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timer: number | undefined;
     const timeout = new Promise<"timeout">((resolve) => {
-      timer = setTimeout(() => resolve("timeout"), DRIVE_DEDUP_INDEX_WAIT_MS);
+      timer = window.setTimeout(() => resolve("timeout"), DRIVE_DEDUP_INDEX_WAIT_MS);
     });
 
     try {
@@ -190,7 +190,7 @@ export class DriveDedupService {
         timeout,
       ]);
     } finally {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     }
   }
 

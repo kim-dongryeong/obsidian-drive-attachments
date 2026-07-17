@@ -634,7 +634,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
   private async openDrivePanel(): Promise<void> {
     const existing = this.app.workspace.getLeavesOfType(DRIVE_PANEL_VIEW_TYPE)[0];
     if (existing) {
-      this.app.workspace.revealLeaf(existing);
+      void this.app.workspace.revealLeaf(existing);
       return;
     }
 
@@ -645,7 +645,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
     }
 
     await leaf.setViewState({ type: DRIVE_PANEL_VIEW_TYPE, active: true });
-    this.app.workspace.revealLeaf(leaf);
+    void this.app.workspace.revealLeaf(leaf);
   }
 
   // Re-render the drive-preview blocks in open notes so a settings change (e.g. the image→note
@@ -777,9 +777,10 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
 
 function chooseLocalFile(): Promise<File | null> {
   return new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.style.display = "none";
+    const input = createEl("input", {
+      cls: "gdab-hidden-file-input",
+      attr: { type: "file" },
+    });
     const finish = (file: File | null): void => {
       resolve(file);
       input.remove();

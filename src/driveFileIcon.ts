@@ -1,4 +1,5 @@
 import { setIcon } from "obsidian";
+import { setTrustedSvg } from "./svgUtil";
 import { bundledIconForFile } from "./iconThemes";
 import type { IconTheme } from "./settings";
 
@@ -53,9 +54,8 @@ function renderBuiltinFileIcon(
   iconTheme: IconTheme,
 ): void {
   const themed = bundledIconForFile(iconTheme, mimeType, name);
-  if (themed) {
-    el.innerHTML = themed; // trusted generated SVG constants, never user pack contents
-    return;
+  if (themed && setTrustedSvg(el, themed)) {
+    return; // trusted generated SVG constants, never user pack contents
   }
 
   setIcon(el, lucideFallback);

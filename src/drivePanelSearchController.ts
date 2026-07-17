@@ -2,7 +2,7 @@ import { prepareFuzzySearch } from "obsidian";
 import { DriveBrowserItem } from "./driveMetadataService";
 import { DriveIndexItem, DriveIndexService } from "./driveIndexService";
 import { DriveSearchLocationQuery, DriveSearchResult, DriveSearchService } from "./driveSearchService";
-import { DrivePanelLocation, MY_DRIVE_ROOT, RECENT_ROOT, SHARED_WITH_ME_ROOT, STARRED_ROOT, TRASH_ROOT } from "./drivePanelLocation";
+import { DrivePanelLocation, RECENT_ROOT, SHARED_WITH_ME_ROOT, STARRED_ROOT, TRASH_ROOT } from "./drivePanelLocation";
 import { matchesTypeCategory, PanelModifiedRange, PanelOwnerOption, PanelTypeCategory } from "./drivePanelFormat";
 
 const DRIVE_PANEL_SEARCH_DEBOUNCE_MS = 300;

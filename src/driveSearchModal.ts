@@ -367,7 +367,7 @@ export class DriveSearchModal extends FuzzySuggestModal<DriveIndexItem> {
     }
 
     const pathEl = container.createDiv({ cls: "gdab-drive-search-result-path" });
-    this.resolveResultPath(value).then((path) => {
+    void this.resolveResultPath(value).then((path) => {
       if (path) {
         this.renderPathContent(pathEl, path);
       } else {

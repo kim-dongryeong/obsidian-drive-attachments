@@ -1,4 +1,5 @@
 import { App, arrayBufferToBase64, MarkdownPostProcessorContext, MarkdownView, Menu, Notice, requestUrl, setIcon, TFile } from "obsidian";
+import { setTrustedSvg } from "./svgUtil";
 import { DriveAuthService } from "./driveAuthService";
 import { DriveMediaProxyService } from "./driveMediaProxyService";
 import { DriveMetadata, DriveMetadataService } from "./driveMetadataService";
@@ -510,7 +511,7 @@ export class DrivePreviewService {
         },
       });
     } else if (icon.svg) {
-      iconEl.innerHTML = icon.svg;
+      setTrustedSvg(iconEl, icon.svg);
     } else if (icon.lucide) {
       setIcon(iconEl, icon.lucide);
     }
@@ -1161,7 +1162,7 @@ export class DrivePreviewService {
         });
       } else if (options.icon.svg) {
         // Trusted constant SVG from the selected bundled icon theme, not user input.
-        iconEl.innerHTML = options.icon.svg;
+        setTrustedSvg(iconEl, options.icon.svg);
       } else if (options.icon.lucide) {
         setIcon(iconEl, options.icon.lucide);
       }

@@ -392,11 +392,7 @@ class DropActionModal extends Modal {
       cls: ["setting-item-description", "gdab-drop-file-summary"],
     });
 
-    const buttonRow = contentEl.createDiv();
-    buttonRow.style.display = "flex";
-    buttonRow.style.gap = "8px";
-    buttonRow.style.justifyContent = "flex-end";
-    buttonRow.style.marginTop = "16px";
+    const buttonRow = contentEl.createDiv({ cls: "gdab-drop-button-row" });
 
     new ButtonComponent(buttonRow)
       .setButtonText("Save locally")

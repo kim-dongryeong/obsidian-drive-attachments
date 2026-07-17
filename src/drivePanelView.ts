@@ -3,7 +3,6 @@ import {
   ItemView,
   MarkdownView,
   Menu,
-  Modal,
   Notice,
   Scope,
   setIcon,
@@ -11,19 +10,17 @@ import {
   WorkspaceLeaf,
 } from "obsidian";
 import { formatBytes } from "./byteFormat";
-import { computeMd5HexFromSource, DriveDedupHit, DriveDedupService } from "./driveDedupService";
+import { DriveDedupService } from "./driveDedupService";
 import { DriveAuthService } from "./driveAuthService";
 import { DriveIndexService } from "./driveIndexService";
 import {
   DriveBrowserItem,
   DriveMetadata,
   DriveMetadataService,
-  DriveOwner,
 } from "./driveMetadataService";
 import { DrivePreviewService } from "./drivePreviewService";
 import {
   folderColorHex,
-  formatAccountDomain,
   formatDetailMetadataError,
   formatItemDetails,
   formatModifiedTime,
@@ -39,7 +36,6 @@ import {
   panelModifiedIcon,
   panelModifiedLabel,
   panelModifiedPhrase,
-  panelOwnerOption,
   panelOwnerOptions,
   PanelOwnerOption,
   panelPrimaryOwnerLabel,
@@ -52,7 +48,6 @@ import {
   sortDriveItemsByTrashedTime,
 } from "./drivePanelFormat";
 import {
-  describePanelDropItems,
   hasLocalFileDrag,
   isJunkFileName,
 } from "./drivePanelDropUtil";
@@ -88,7 +83,6 @@ import {
 } from "./driveRowActions";
 import { getDriveResultIcon, getDriveResultTypeClass, renderDriveResultHint, renderSearchHighlights } from "./driveSearchModal";
 import {
-  type DriveSearchLocationQuery,
   DriveSearchService,
 } from "./driveSearchService";
 import { DRIVE_FOLDER_MIME_TYPE, DRIVE_PANEL_DRAG_MIME, serializeDrivePanelDragItems } from "./driveTypes";
@@ -125,7 +119,6 @@ import {
   STARRED_ROOT,
   TRASH_ROOT,
   virtualRootName,
-  VIRTUAL_ROOT_IDS,
 } from "./drivePanelLocation";
 import {
   FolderColorPickerModal,
@@ -535,7 +528,7 @@ export class DrivePanelView extends ItemView {
     }
     const draggedIds = new Set(dragged.map((it) => it.id));
     this.contentEl.querySelectorAll(".gdab-drive-panel-row").forEach((el) => {
-      if (el instanceof HTMLElement && el.dataset.itemId !== undefined && draggedIds.has(el.dataset.itemId)) {
+      if (el.instanceOf(HTMLElement) && el.dataset.itemId !== undefined && draggedIds.has(el.dataset.itemId)) {
         el.addClass("is-dragging");
       }
     });
@@ -2436,16 +2429,16 @@ export class DrivePanelView extends ItemView {
       return;
     }
 
-    const input = document.createElement("input");
-    input.type = "file";
-    input.multiple = true;
-    input.style.display = "none";
+    const input = createEl("input", {
+      cls: "gdab-hidden-file-input",
+      attr: { type: "file", multiple: true },
+    });
     input.addEventListener("change", () => {
       const files = Array.from(input.files ?? []);
       input.remove();
       this.startManualFileUpload(files, target);
     });
-    document.body.appendChild(input);
+    this.contentEl.ownerDocument.body.appendChild(input);
     input.click();
   }
 

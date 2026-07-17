@@ -3852,3 +3852,17 @@
   justify-content: flex-end;
   margin-top: 16px;
 }
+
+/* Utility: a programmatically-triggered <input type=file> that must not occupy layout.
+   Replaces inline `style.display = "none"` (Obsidian review: no static style assignment). */
+.gdab-hidden-file-input {
+  display: none;
+}
+
+/* dropController's Save-locally/Upload button row (was inline flex styles). */
+.gdab-drop-button-row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}

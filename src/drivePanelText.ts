@@ -110,6 +110,9 @@ export function isDownloadableDriveFile(item: DriveBrowserItem): boolean {
 export function sanitizeDownloadedFileName(name: string): string {
   const sanitized = name
     .trim()
+    // Intentionally strips ASCII control chars (U+0000-001F) along with the reserved filename
+    // characters, so a Drive name can never write a control byte into a local download path.
+    // eslint-disable-next-line no-control-regex
     .replace(/[\\/:*?"<>|\u0000-\u001F]/g, "-")
     .replace(/\s+/g, " ")
     .replace(/^\.+$/, "")

@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: write
+  # Required by actions/attest-build-provenance to sign the release assets.
+  id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -23,6 +26,15 @@ jobs:
         run: |
           npm ci
           npm run build
+
+      # Cryptographic provenance so users can verify main.js/styles.css were built from this repo.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
 
       - name: Create release
         env:

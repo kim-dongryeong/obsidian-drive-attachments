@@ -555,7 +555,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
       return;
     }
 
-    new Setting(containerEl).setName("Search options").setHeading();
+    new Setting(containerEl).setName("Search").setHeading();
 
     new Setting(containerEl)
       .setName("Enable path search")
@@ -881,7 +881,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
 }
 
 function createExtraFrontmatterDescription(assetNoteOnlyHint: string): DocumentFragment {
-  const fragment = document.createDocumentFragment();
+  const fragment = createFragment();
   fragment.appendText(
     "YAML mapping added only when a new Drive-link note is created. Blank adds nothing. Lists are supported; " +
       `Drive-managed keys are ignored. Quote YAML values when needed.${assetNoteOnlyHint} Example:`,
