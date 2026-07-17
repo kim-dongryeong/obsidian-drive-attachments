@@ -155,4 +155,6 @@ Andrew Marconi.
 
 ## License
 
-[MIT](LICENSE) © Kim Dongryeong
+[AGPL-3.0](LICENSE) © Kim Dongryeong
+
+Free to use, modify, and redistribute — but derivatives must stay open source under the same license, **including when the code is used to provide a network service** (AGPL §13 closes the SaaS loophole). Versions up to 0.72.0 were published under MIT.

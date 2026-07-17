@@ -16,7 +16,7 @@
     "attachments"
   ],
   "author": "kdr",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "devDependencies": {
     "@types/node": "^20.14.0",
     "builtin-modules": "^3.3.0",
