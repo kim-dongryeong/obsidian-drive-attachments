@@ -267,7 +267,7 @@ export class CustomIconPackService {
       iconCount++;
     }
 
-    const map = isRecord(root.map) ? normalizeIconMap(root.map as Record<string, unknown>) : {};
+    const map = isRecord(root.map) ? normalizeIconMap(root.map) : {};
     const mapCount = Object.keys(map).length;
     if (mapCount > 0) {
       await this.adapter.write(

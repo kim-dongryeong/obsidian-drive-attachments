@@ -276,7 +276,7 @@ export class DriveMetadataService {
   // so it can show each hit's location without a full `files.get`.
   async resolveDrivePathByParents(
     parents: string[] | undefined,
-    metadataDriveId?: string | undefined,
+    metadataDriveId?: string,
   ): Promise<string | null> {
     if (!parents || parents.length === 0) {
       return null;
@@ -365,7 +365,7 @@ export class DriveMetadataService {
       const rawParents = (parsed as { parents?: unknown }).parents;
       const folderParents =
         Array.isArray(rawParents) && rawParents.every((entry) => typeof entry === "string")
-          ? (rawParents as string[])
+          ? rawParents
           : undefined;
 
       const rawDriveId = (parsed as { driveId?: unknown }).driveId;

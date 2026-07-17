@@ -447,7 +447,7 @@ function isMigrated(outcome: MigrationOutcome): outcome is MigratedOutcome {
 // so the migration keeps it. The active note's own references are excluded (they've just been rewritten).
 function isReferencedByOtherNote(app: App, file: TFile, exceptNotePath: string): boolean {
   for (const [source, targets] of Object.entries(app.metadataCache.resolvedLinks)) {
-    if (source !== exceptNotePath && (targets as Record<string, number>)[file.path]) {
+    if (source !== exceptNotePath && targets[file.path]) {
       return true;
     }
   }

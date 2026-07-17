@@ -97,7 +97,7 @@ import {
   PanelTheme,
   PanelViewMode,
 } from "./settings";
-import { DriveUploadService, FileUploadSource } from "./driveUploadService";
+import { DriveUploadService } from "./driveUploadService";
 import { DriveFileOpsService } from "./driveFileOpsService";
 import { DriveThumbnailService } from "./driveThumbnailService";
 import { DrivePanelThumbnails } from "./drivePanelThumbnails";

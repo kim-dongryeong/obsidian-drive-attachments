@@ -170,6 +170,9 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
     // then opens the Save locally / Upload to Drive modal.
     this.registerEvent(
       this.app.workspace.on("editor-drop", (evt, editor, info) => {
+        if (evt.defaultPrevented) {
+          return;
+        }
         this.dropController.handleEditorDrop(evt, editor, info);
       }),
     );
@@ -232,6 +235,9 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
     // setting. Default "vault" makes this a no-op so paste behaves exactly as Obsidian's own.
     this.registerEvent(
       this.app.workspace.on("editor-paste", (evt, editor, info) => {
+        if (evt.defaultPrevented) {
+          return;
+        }
         this.dropController.handleEditorPaste(evt, editor, info);
       }),
     );

@@ -109,7 +109,7 @@ export class DriveThumbnailService {
 
   private trimCache(): void {
     while (this.cacheChars > MAX_CACHE_CHARS && this.cache.size > 1) {
-      const oldestId = this.cache.keys().next().value as string | undefined;
+      const oldestId = this.cache.keys().next().value;
       if (!oldestId) {
         break;
       }

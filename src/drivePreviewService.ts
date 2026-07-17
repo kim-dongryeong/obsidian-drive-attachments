@@ -870,7 +870,7 @@ export class DrivePreviewService {
     const url = this.createBlobUrl(await this.getMediaBytes(target, label, maxBytes), blobMime);
     this.blobUrlByKey.set(key, url);
     while (this.blobUrlByKey.size > MAX_BLOB_ENTRIES) {
-      const oldestKey = this.blobUrlByKey.keys().next().value as string | undefined;
+      const oldestKey = this.blobUrlByKey.keys().next().value;
       if (oldestKey === undefined || oldestKey === key) {
         break;
       }
@@ -1069,7 +1069,7 @@ export class DrivePreviewService {
     this.dataUrlCache.set(id, dataUrl);
     this.cacheBytes += dataUrl.length;
     while (this.cacheBytes > MAX_CACHE_BYTES && this.dataUrlCache.size > 1) {
-      const oldest = this.dataUrlCache.keys().next().value as string | undefined;
+      const oldest = this.dataUrlCache.keys().next().value;
       if (oldest === undefined) {
         break;
       }

@@ -923,5 +923,5 @@ function findScrollContainer(start: HTMLElement): HTMLElement {
     }
     current = current.parentElement;
   }
-  return (start.closest(".vertical-tab-content") as HTMLElement | null) ?? start;
+  return start.closest<HTMLElement>(".vertical-tab-content") ?? start;
 }
