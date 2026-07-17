@@ -1,38 +1,35 @@
 # Drive Attachments
 
-An [Obsidian](https://obsidian.md) plugin that uses **Google Drive as your vault's
-attachment layer**. Drop a file into a note and it is uploaded to Google Drive instead of
-the vault, leaving behind a durable Markdown link (or a dedicated *asset note*). You can
-also search your Drive and insert links to existing files and folders.
+**Keep your Obsidian vault light. Send attachments to *your* Google Drive instead.**
 
-> Keep large binaries out of your (often Git-tracked, synced) vault, while your notes keep
-> durable links and metadata.
+Drop a file into a note — it uploads to your own Google Drive and a durable link takes its place. Search your entire Drive without leaving Obsidian. Browse, organize, and upload from a full Drive file manager in the sidebar.
 
-**Desktop only.**
+[![Release](https://img.shields.io/github/v/release/kim-dongryeong/obsidian-drive-attachments?label=release)](https://github.com/kim-dongryeong/obsidian-drive-attachments/releases)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+![Desktop only](https://img.shields.io/badge/platform-desktop-lightgrey)
 
-<!-- TODO(demo): drop a short drop→upload→link screencast here, e.g.  ![demo](docs/demo.gif) -->
+![Drop a file into a note — it uploads to Google Drive and becomes a durable link](docs/media/hero.gif)
 
-**In one line:** drop a big file into a note → it uploads to *your* Google Drive → a durable link (or
-asset note) takes its place, so your vault stays small and syncable.
+## Why
 
-## Features
+Vaults get heavy. PDFs, images, videos, and design files bloat your (often Git-tracked, cloud-synced) vault until sync crawls and backups balloon. **Drive Attachments moves the bytes to Google Drive and keeps only links and metadata in your notes** — your vault stays small, fast, and fully syncable, while every attachment stays one click away.
 
-- **Upload on drop** — drag a file into the editor and it goes to Google Drive, not the
-  vault. A Markdown link or asset note is inserted in its place.
-- **Content-hash dedup** — re-dropping the same file reuses the existing Drive file instead
-  of creating duplicates.
-- **Search & insert** — fuzzy search across My Drive and Shared Drives (server search and
-  path search) and insert durable Drive-link notes.
-- **Asset notes** — optional dedicated notes per file, with configurable frontmatter,
-  location, and naming template.
-- **Inline preview** — thumbnails, hover previews, and a lightbox for Drive-hosted images.
-- **Migrate existing attachments** — move attachments already in your vault out to Drive.
-- **Trash management** and a dedup browser for cleaning up.
-- **File-type icons** for a wide range of formats.
+- 🔒 **Your Drive, your credentials.** The plugin talks directly to Google with *your own* OAuth app. No third-party server, no account, no telemetry.
+- 🔗 **Durable links.** Drive file IDs never change — links survive renames and moves on Drive.
+- 🗂️ **A real file manager.** Not just uploads: browse, search, rename, move, color, and trash your Drive from the Obsidian sidebar.
+
+## See it in action
+
+| Search Drive → insert a link | Drop a file → auto-upload | Browse Drive in the sidebar |
+|---|---|---|
+| ![Search Google Drive and insert a link](docs/media/search-insert.gif) | ![Drop a local file into the editor to upload it](docs/media/drop-upload.gif) | ![Browse Google Drive in the sidebar panel](docs/media/panel-browse.gif) |
 
 ## Installation
 
-> Pending submission to the Obsidian Community Plugins directory.
+> Pending review for the Obsidian Community Plugins directory.
+
+**[BRAT](https://github.com/TfTHacker/obsidian42-brat)** (recommended until then) — add
+`kim-dongryeong/obsidian-drive-attachments` as a beta plugin.
 
 **Manual**
 
@@ -41,13 +38,118 @@ asset note) takes its place, so your vault stays small and syncable.
 2. Copy them into `<your-vault>/.obsidian/plugins/drive-attachments/`.
 3. Reload Obsidian and enable **Drive Attachments** in *Settings → Community plugins*.
 
-**[BRAT](https://github.com/TfTHacker/obsidian42-brat)** — add
-`kim-dongryeong/obsidian-drive-attachments` as a beta plugin.
+Then follow [Setup](#setup) (~7 minutes, one time) to connect your own Google Cloud project.
+
+---
+
+# Feature manual
+
+Everything the plugin does, in detail.
+
+## 1. Upload on drop (editor)
+
+Drag any local file into a note. Instead of copying it into the vault, the plugin uploads it to Google Drive (streaming in 5 MiB chunks — large files don't balloon memory) and inserts a Markdown link or an [asset note](#3-asset-notes) at the cursor. A `⏳ Uploading…` placeholder shows progress and is replaced in place.
+
+![Editor drop: placeholder while uploading, then a durable Drive link](docs/media/editor-drop-flow.gif)
+
+### Content-hash dedup
+
+Re-drop a file that already exists on Drive (byte-identical, detected by MD5) and the plugin offers to **reuse the existing Drive file** instead of uploading a duplicate.
+
+![Dedup modal: use existing file or upload anyway](docs/media/dedup-modal.png)
+
+## 2. Search & insert
+
+`Search Google Drive and insert link` searches your whole Drive — a locally cached instant index (persisted across restarts, delta-synced via the Drive Changes API) merged with live server results, so matches appear as you type even seconds after startup. Each result shows its type icon and full folder path.
+
+![Search modal: instant fuzzy results with folder paths](docs/media/search-modal.gif)
+
+## 3. Asset notes
+
+Optionally, each uploaded or linked file gets its own **asset note** — a dedicated Markdown note with configurable frontmatter (Drive ID, size, MD5, timestamps), location, and naming template. Your attachments become first-class, linkable, taggable citizens of the vault.
+
+![An asset note with Drive metadata frontmatter](docs/media/asset-note.png)
+
+## 4. Inline previews
+
+Drive-hosted images render as thumbnails in your notes, with hover previews and a full lightbox — all fetched with authenticated requests (your token never leaks into URLs).
+
+![Inline thumbnail, hover preview, and lightbox for Drive images](docs/media/inline-preview.gif)
+
+## 5. The Drive panel — a file manager in your sidebar
+
+`Open Drive panel` gives you a full Drive browser: **My Drive, shared drives, Shared with me, Starred, Recent, and Trash**, in list / compact / grid views (grid shows lazy-loaded thumbnails).
+
+![Drive panel: navigation, views, and thumbnails](docs/media/panel-tour.gif)
+
+### Browse like a native file manager
+
+- Breadcrumb path with sibling menus and an editable address bar
+- Back / Forward / Up history, `⌘↑` up-a-level with focus restore
+- Sort by name, dates, size, type (Trash sorts by date trashed) — folders first or mixed
+- 200-per-page listings with **Load more** (keyboard reachable)
+
+![Breadcrumbs, history, sorting](docs/media/panel-navigation.gif)
+
+### Full keyboard control
+
+Arrow keys, PageUp/Down, Home/End, type-ahead jump, `Enter` to open, `F2` to rename, `Shift+F10` / `Ctrl+Enter` / menu key for the context menu, Shift-select ranges, `⌘A`, `Delete` to trash.
+
+![Keyboard-only navigation in the panel](docs/media/panel-keyboard.gif)
+
+### Search with filters
+
+Search from the panel and refine like on drive.google.com: **location scopes** (anywhere, current folder, My Drive, Shared with me, Starred, Trash) and **Type / People / Modified** filter chips. Results are relevance-ranked, show each hit's folder path, and every hit offers **Open location**. Opening a folder from results rebuilds its true breadcrumb ancestry.
+
+![Panel search: scopes, filter chips, open location](docs/media/panel-search.gif)
+
+### Organize your Drive
+
+Everything in the row context menu: **rename, move (folder picker), copy, star, folder colors** (drive.google.com palette), new folder, download, share-link copy — plus multi-select bulk actions and a details bar with owner, size, and location.
+
+![Context menu: rename, move, color, star](docs/media/panel-organize.gif)
+![Folder colors matching drive.google.com](docs/media/folder-colors.png)
+
+### Upload by drag & drop
+
+Drop files **or entire folders** onto the panel (or onto a specific folder row). Folder trees are recreated faithfully — subfolders included. An in-panel progress card shows the target, per-file progress, and a **Cancel** button; drops made mid-upload queue up automatically; name collisions get ` (1)` suffixes like drive.google.com.
+
+![Panel drop: progress card, queue, cancel](docs/media/panel-upload.gif)
+
+### Trash management
+
+Browse Drive's trash, **restore** or **delete forever** (with explicit confirmation), sorted by date trashed.
+
+![Trash view with restore and delete forever](docs/media/panel-trash.png)
+
+## 6. Google Picker
+
+Prefer Google's own UI? The **Google Picker** opens Drive's native file/folder chooser for inserting links — handy for files outside the plugin's index.
+
+![Google Picker integration](docs/media/picker.png)
+
+## 7. Migrate existing attachments
+
+Already have a vault full of attachments? The migration tool moves them to Drive in bulk and rewrites your notes' links — with a dry-run preview first.
+
+![Vault-to-Drive migration with dry-run preview](docs/media/migrate.gif)
+
+## 8. Icons & theming
+
+- **File-type icons** for a wide range of formats, with multiple bundled icon themes
+- **Custom icon packs** — drop your own SVGs into a folder and the plugin picks them up live
+- **Panel themes** — restyle the Drive panel (default, Notion-like, Drive-like, macOS-like, and more)
+
+![Icon themes and custom icon packs](docs/media/icons-themes.png)
+
+---
 
 ## Setup
 
 This plugin talks to Google Drive with **your own** Google Cloud credentials — nothing is
 shared with a third-party server.
+
+![Plugin settings after a successful connection](docs/media/settings-connected.png)
 
 1. In the [Google Cloud Console](https://console.cloud.google.com/), create a project and
    enable the **Google Drive API** and the **Google Picker API**.
