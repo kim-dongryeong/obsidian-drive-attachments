@@ -207,7 +207,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Custom icon pack folder")
       .setDesc(
-        `Vault-relative folder with SVG files and optional map.json. Left empty it uses ${DEFAULT_CUSTOM_ICON_PACK_FOLDER} — ` +
+        `Vault-relative folder with icon files (svg/png/webp/gif/ico) and optional map.json. Name a file after an extension (mp3.svg) to target that extension, or after a category (audio.svg) as the fallback. Left empty it uses ${DEFAULT_CUSTOM_ICON_PACK_FOLDER} — ` +
           "drop icons there and each overrides the selected theme for that file type; types you don't provide fall back to the theme.",
       )
       .addText((text) => {
@@ -244,7 +244,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Custom icon pack file")
-      .setDesc("Share the pack as one icons.json (written into the folder), or rebuild the folder's SVGs from an icons.json.")
+      .setDesc("Share the pack as one icons.json (written into the folder; binary formats travel as data URIs), or rebuild the folder's icon files from an icons.json.")
       .addButton((button) =>
         button.setButtonText("Export → JSON").onClick(() => this.plugin.exportIconPackToJson()),
       )
