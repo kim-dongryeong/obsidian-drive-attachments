@@ -25,15 +25,18 @@ jobs:
           npm run build
 
 
-      - name: Create release
+      - name: Create draft release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref_name }}
         run: |
-          # Publish directly (no --draft): the community directory matches the repo manifest version
-          # against a PUBLISHED release, so a draft leaves a window where the two disagree.
+          # Create a DRAFT only. The maintainer publishes it from a personal token
+          # (gh release edit "$tag" --draft=false --latest). A release PUBLISHED by this Action's
+          # GITHUB_TOKEN does NOT emit the release webhook (GitHub suppresses it to avoid recursive
+          # runs), so the Obsidian community directory never sees it and won't re-run its review.
+          # Publishing the draft with a user token fires release:published and triggers the re-scan.
           gh release create "$tag" \
             --title="$tag" \
-            --latest \
+            --draft \
             --notes "Drive Attachments $tag" \
             main.js manifest.json styles.css
