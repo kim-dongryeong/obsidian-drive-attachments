@@ -116,7 +116,9 @@ export const DEFAULT_ASSET_NOTE_FOLDER_PATH = "Attachments/Drive links";
 // Same convention for the custom icon pack: empty field → this folder is actually used (icons found
 // there override the theme per-icon; missing ones fall back to it), matching Obsidian's own
 // "attachment folder path" behaviour where the greyed placeholder is the effective default.
-export const DEFAULT_CUSTOM_ICON_PACK_FOLDER = ".obsidian/icon pack";
+// Subfolder name only; the effective default is `${vault.configDir}/${this}` resolved at runtime so
+// it honours a renamed config folder (see CustomIconPackService + the settings placeholder).
+export const CUSTOM_ICON_PACK_SUBFOLDER = "icon pack";
 
 export interface GoogleDriveAttachmentBridgeSettings {
   clientId: string;

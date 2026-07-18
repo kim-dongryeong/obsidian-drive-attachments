@@ -85,7 +85,11 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
     this.search = new DriveSearchService(this.auth);
     this.upload = new DriveUploadService(this.auth);
     this.mediaProxy = new DriveMediaProxyService(this.auth);
-    this.customIconPack = new CustomIconPackService(this.app.vault.adapter, () => this.settings.customIconPackFolder);
+    this.customIconPack = new CustomIconPackService(
+      this.app.vault.adapter,
+      () => this.settings.customIconPackFolder,
+      this.app.vault.configDir,
+    );
     await this.customIconPack.reload();
     // Apply pack edits (drop or delete an SVG in the folder) without an Obsidian restart. The `raw`
     // event fires for config-dir files too — unlike create/modify/delete, which only cover the vault's
@@ -459,7 +463,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
       name: "Refresh Drive metadata",
       checkCallback: (checking) => {
         const file = this.app.workspace.getActiveFile();
-        const driveId = file instanceof TFile
+        const driveId: unknown = file instanceof TFile
           ? this.app.metadataCache.getFileCache(file)?.frontmatter?.drive_id
           : null;
         const canRun = file instanceof TFile && file.extension === "md" && typeof driveId === "string" && driveId.length > 0;
@@ -501,7 +505,10 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
           return true;
         }
 
-        void this.noteActions.deleteDriveFile(file as TFile, driveId);
+        if (!(file instanceof TFile)) {
+          return false;
+        }
+        void this.noteActions.deleteDriveFile(file, driveId);
         return true;
       },
     });
@@ -537,9 +544,11 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
           return true;
         }
 
-        const target = file as TFile;
+        if (!(file instanceof TFile)) {
+          return false;
+        }
         void this.app.vault
-          .process(target, (content) => upsertActionsSection(content, driveId))
+          .process(file, (content) => upsertActionsSection(content, driveId))
           .catch((error) => {
             new Notice(`Insert Drive actions block failed: ${error instanceof Error ? error.message : String(error)}`);
           });
@@ -633,7 +642,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
     if (!(file instanceof TFile) || file.extension !== "md") {
       return null;
     }
-    const driveId = this.app.metadataCache.getFileCache(file)?.frontmatter?.drive_id;
+    const driveId: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.drive_id;
     return typeof driveId === "string" && driveId.trim().length > 0 ? driveId.trim() : null;
   }
 
@@ -695,7 +704,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, (await this.loadData()) as Partial<GoogleDriveAttachmentBridgeSettings>);
     // Retired settings — their toggles were removed from the UI, so pin the behavior for every
     // install (new and existing, whatever the saved value): in-Obsidian search is always on, the
     // redundant server-only command stays hidden, a plain row click selects, folders open on

@@ -326,19 +326,21 @@ function parseDriveDedupItemsWithMd5(
   }
 
   const body = parsed as { files?: unknown; nextPageToken?: unknown } | null;
+  const rawNextPageToken: unknown = body?.nextPageToken;
+  const nextPageToken =
+    typeof rawNextPageToken === "string" && rawNextPageToken.length > 0 ? rawNextPageToken : null;
   const files = body?.files;
   if (!Array.isArray(files) || files.length === 0) {
-    return {
-      item: null,
-      nextPageToken: typeof body?.nextPageToken === "string" && body.nextPageToken.length > 0 ? body.nextPageToken : null,
-    };
+    return { item: null, nextPageToken };
   }
 
   const normalizedMd5 = normalizeMd5(md5);
-  const matchingFile = files.find((file) => normalizeMd5((file as { md5Checksum?: unknown }).md5Checksum) === normalizedMd5);
+  const matchingFile: unknown = files.find(
+    (file) => normalizeMd5((file as { md5Checksum?: unknown }).md5Checksum) === normalizedMd5,
+  );
   return {
     item: matchingFile ? getValidDriveItem(matchingFile) : null,
-    nextPageToken: typeof body?.nextPageToken === "string" && body.nextPageToken.length > 0 ? body.nextPageToken : null,
+    nextPageToken,
   };
 }
 

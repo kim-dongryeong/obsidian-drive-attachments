@@ -204,8 +204,9 @@ export class DrivePanelSearchController {
     this.searchLoading = false;
     const failures = settled.filter((result): result is PromiseRejectedResult => result.status === "rejected");
     if (failures.length === settled.length) {
-      const reason = failures[0]?.reason;
-      this.searchError = reason instanceof Error ? reason.message : String(reason ?? "Drive search failed.");
+      const reason: unknown = failures[0]?.reason;
+      this.searchError =
+        reason instanceof Error ? reason.message : typeof reason === "string" ? reason : "Drive search failed.";
     }
     this.host.refreshListOnly();
   }

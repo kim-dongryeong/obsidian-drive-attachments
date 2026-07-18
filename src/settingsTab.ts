@@ -5,7 +5,6 @@ import {
   DEFAULT_ASSET_NOTE_FOLDER_PATH,
   DEFAULT_ASSET_NOTE_NAME_TEMPLATE,
   DEFAULT_ASSET_NOTE_SUBFOLDER_NAME,
-  DEFAULT_CUSTOM_ICON_PACK_FOLDER,
   ICON_THEME_OPTIONS,
   isAssetNoteLocation,
   isEmbedActionToolbarStyle,
@@ -207,7 +206,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Custom icon pack folder")
       .setDesc(
-        `Vault-relative folder with icon files (svg/png/webp/gif/ico) and optional map.json. Name a file after an extension (mp3.svg) to target that extension, or after a category (audio.svg) as the fallback. Left empty it uses ${DEFAULT_CUSTOM_ICON_PACK_FOLDER} — ` +
+        `Vault-relative folder with icon files (svg/png/webp/gif/ico) and optional map.json. Name a file after an extension (mp3.svg) to target that extension, or after a category (audio.svg) as the fallback. Left empty it uses ${this.app.vault.configDir}/icon pack — ` +
           "drop icons there and each overrides the selected theme for that file type; types you don't provide fall back to the theme.",
       )
       .addText((text) => {
@@ -219,7 +218,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
           await this.plugin.reloadCustomIconPack();
         }, 600, true);
         text
-          .setPlaceholder(DEFAULT_CUSTOM_ICON_PACK_FOLDER)
+          .setPlaceholder(`${this.app.vault.configDir}/icon pack`)
           .setValue(this.plugin.settings.customIconPackFolder)
           .onChange((value) => {
             this.plugin.settings.customIconPackFolder = value.trim();

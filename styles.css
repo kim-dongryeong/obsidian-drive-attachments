@@ -272,8 +272,7 @@
 .gdab-dedup-names {
   display: grid;
   grid-template-columns: max-content 1fr;
-  column-gap: 12px;
-  row-gap: 2px;
+  gap: 2px 12px;
   align-items: baseline;
   margin-top: 12px;
 }
@@ -3417,7 +3416,6 @@
   padding: 0;
   border: 0;
   clip: rect(0, 0, 0, 0);
-  clip-path: inset(50%);
   overflow: hidden;
   white-space: nowrap;
 }

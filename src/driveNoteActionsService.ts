@@ -88,7 +88,7 @@ export class DriveNoteActionsService {
 
   private async stampDeletionState(file: TFile, kind: "trashed" | "deleted"): Promise<void> {
     try {
-      await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+      await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
         frontmatter[kind === "trashed" ? "drive_trashed" : "drive_deleted"] = true;
         frontmatter.drive_deleted_checked = new Date().toISOString();
       });

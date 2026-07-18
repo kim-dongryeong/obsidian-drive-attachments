@@ -167,7 +167,7 @@ export class InsertService {
       return;
     }
 
-    await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+    await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
       frontmatter.googleDriveFolderUrl = item.webViewLink;
     });
     new Notice(`Attached Drive folder: ${item.name}`);
@@ -189,8 +189,7 @@ export class InsertService {
   }
 
   async refreshDriveMetadata(file: TFile): Promise<void> {
-    const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
-    const driveId = frontmatter?.drive_id;
+    const driveId: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.drive_id;
     if (typeof driveId !== "string" || driveId.trim().length === 0) {
       throw new Error("Current note does not have a drive_id frontmatter field.");
     }
@@ -199,7 +198,7 @@ export class InsertService {
     const pathInfo = await this.resolveDrivePathInfo(metadata);
     // applyDriveMetadataToFrontmatter also deletes the legacy `drive_export_links` key (it clears
     // every managed key and no longer re-adds that one); the links land in the body section instead.
-    await this.app.fileManager.processFrontMatter(file, (target) => {
+    await this.app.fileManager.processFrontMatter(file, (target: Record<string, unknown>) => {
       applyDriveMetadataToFrontmatter(target, metadata, pathInfo, this.getSettings().accountEmail);
     });
     if (metadata.exportLinks && Object.keys(metadata.exportLinks).length > 0) {
@@ -299,7 +298,7 @@ export class InsertService {
     const pathInfo = await this.resolveDrivePathInfo(metadata);
 
     if (metadata) {
-      await this.app.fileManager.processFrontMatter(file, (target) => {
+      await this.app.fileManager.processFrontMatter(file, (target: Record<string, unknown>) => {
         applyDriveMetadataToFrontmatter(target, metadata, pathInfo, this.getSettings().accountEmail);
       });
     }
@@ -428,8 +427,7 @@ export class InsertService {
   }
 
   private getAttachedFolderUrl(file: TFile): string | null {
-    const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
-    const value = frontmatter?.googleDriveFolderUrl;
+    const value: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.googleDriveFolderUrl;
     return typeof value === "string" && value.length > 0 ? value : null;
   }
 

@@ -1,6 +1,6 @@
 import { DataAdapter, normalizePath } from "obsidian";
 import { fileIconName } from "./fileIconName";
-import { DEFAULT_CUSTOM_ICON_PACK_FOLDER } from "./settings";
+import { CUSTOM_ICON_PACK_SUBFOLDER } from "./settings";
 
 interface ParsedIconMap {
   map: Record<string, string>;
@@ -40,6 +40,8 @@ const PACK_ICON_FORMATS = ["svg", "png", "webp", "gif", "ico"] as const;
 
 export class CustomIconPackService {
   private iconFiles = new Map<string, string>();
+  // `${configDir}/icon pack` — the effective folder when the setting is left empty.
+  private readonly defaultFolder: string;
   // The user's explicit map.json overrides ONLY — kept separate from the built-in extension table
   // so explicit user intent can outrank the mimeType while our built-in guesses stay below it.
   private userExtToIcon: Record<string, string> = {};
@@ -48,7 +50,10 @@ export class CustomIconPackService {
   constructor(
     private readonly adapter: DataAdapter,
     private readonly getFolderPath: () => string,
-  ) {}
+    configDir: string,
+  ) {
+    this.defaultFolder = `${configDir}/${CUSTOM_ICON_PACK_SUBFOLDER}`;
+  }
 
   // The effective (default-resolved) pack folder currently loaded, or "" before the first reload.
   // Used by the folder watcher to tell whether a changed path belongs to the pack.
@@ -57,7 +62,7 @@ export class CustomIconPackService {
   }
 
   async reload(): Promise<void> {
-    const folderPath = normalizePackFolderPath(this.getFolderPath());
+    const folderPath = normalizePackFolderPath(this.getFolderPath(), this.defaultFolder);
     this.folderPath = folderPath;
     this.iconFiles = new Map();
     this.userExtToIcon = {};
@@ -146,7 +151,7 @@ export class CustomIconPackService {
   }
 
   async exportToJson(): Promise<CustomIconPackExportResult> {
-    const folderPath = normalizePackFolderPath(this.getFolderPath());
+    const folderPath = normalizePackFolderPath(this.getFolderPath(), this.defaultFolder);
     if (!folderPath) {
       throw new Error("Set a custom icon pack folder before exporting.");
     }
@@ -210,7 +215,7 @@ export class CustomIconPackService {
   // fatal. We only ever WRITE the svg strings to disk; rendering still goes through the file-based
   // `<img getResourcePath>` path, so no untrusted svg is injected inline.
   async importFromJson(): Promise<CustomIconPackImportResult> {
-    const folderPath = normalizePackFolderPath(this.getFolderPath());
+    const folderPath = normalizePackFolderPath(this.getFolderPath(), this.defaultFolder);
     if (!folderPath) {
       throw new Error("Set a custom icon pack folder before importing.");
     }
@@ -293,10 +298,10 @@ export class CustomIconPackService {
   }
 }
 
-function normalizePackFolderPath(path: string): string {
+function normalizePackFolderPath(path: string, defaultFolder: string): string {
   // Empty field → use the default folder (Obsidian placeholder-is-default convention). Icons present
   // there override the selected theme per-icon; anything missing falls back to the theme.
-  const trimmed = path.trim() || DEFAULT_CUSTOM_ICON_PACK_FOLDER;
+  const trimmed = path.trim() || defaultFolder;
   return normalizePath(trimmed.replace(/^\/+/, "").replace(/\/+$/, ""));
 }
 

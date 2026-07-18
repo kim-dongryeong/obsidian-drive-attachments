@@ -55,6 +55,7 @@ export class SecretStore {
 
   private getSafeStorage(): ElectronSafeStorage | null {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- Electron's safeStorage is only reachable through require("electron") in the Obsidian renderer; there is no ESM entry point for it
       const electron = require("electron") as ElectronModule;
       const safeStorage = electron.safeStorage ?? electron.remote?.safeStorage;
       return safeStorage?.isEncryptionAvailable() ? safeStorage : null;

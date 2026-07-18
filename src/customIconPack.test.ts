@@ -21,7 +21,7 @@ function fakeAdapter(files: Record<string, string>): DataAdapter {
 }
 
 async function loadPack(files: Record<string, string>): Promise<CustomIconPackService> {
-  const pack = new CustomIconPackService(fakeAdapter(files), () => "icons");
+  const pack = new CustomIconPackService(fakeAdapter(files), () => "icons", ".obsidian");
   await pack.reload();
   return pack;
 }

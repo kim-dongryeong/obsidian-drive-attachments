@@ -76,7 +76,8 @@ export class DriveServerSearchModal extends SuggestModal<DriveSearchResult> {
     const generation = ++this.searchGeneration;
     return new Promise((resolve) => {
       this.pendingResolve = resolve;
-      this.pendingTimer = window.setTimeout(async () => {
+      this.pendingTimer = window.setTimeout(() => {
+        void (async () => {
         this.pendingTimer = null;
         this.pendingResolve = null;
 
@@ -114,6 +115,7 @@ export class DriveServerSearchModal extends SuggestModal<DriveSearchResult> {
           }
           resolve([]);
         }
+        })();
       }, SEARCH_DEBOUNCE_MS);
     });
   }

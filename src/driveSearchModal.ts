@@ -96,7 +96,7 @@ export class DriveSearchModal extends FuzzySuggestModal<DriveIndexItem> {
   }
 
   onOpen(): void {
-    super.onOpen();
+    void super.onOpen();
     this.startIndexLoad();
   }
 
