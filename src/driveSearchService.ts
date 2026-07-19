@@ -221,12 +221,18 @@ function escapeDriveQueryString(value: string): string {
 }
 
 function buildDriveNameContainsQuery(query: string): string {
-  const variants = uniqueSearchNormalizationVariants(query);
-  if (variants.length === 1) {
-    return `name contains '${escapeDriveQueryString(variants[0])}'`;
-  }
-
-  return `(${variants.map((variant) => `name contains '${escapeDriveQueryString(variant)}'`).join(" or ")})`;
+  // Split the query on whitespace and AND one `name contains` clause per token, so multi-word
+  // queries match order-independently (".jpg mount" hits "mount-….jpg") instead of requiring the
+  // whole query as one contiguous phrase. Each token still ORs its NFC/NFD normalization variants.
+  const tokens = query.split(/\s+/).filter((token) => token.length > 0);
+  const clauses = (tokens.length > 0 ? tokens : [query]).map((token) => {
+    const variants = uniqueSearchNormalizationVariants(token);
+    if (variants.length === 1) {
+      return `name contains '${escapeDriveQueryString(variants[0])}'`;
+    }
+    return `(${variants.map((variant) => `name contains '${escapeDriveQueryString(variant)}'`).join(" or ")})`;
+  });
+  return clauses.length === 1 ? clauses[0] : `(${clauses.join(" and ")})`;
 }
 
 function uniqueSearchNormalizationVariants(query: string): string[] {

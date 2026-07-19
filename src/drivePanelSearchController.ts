@@ -4,6 +4,7 @@ import { DriveIndexItem, DriveIndexService } from "./driveIndexService";
 import { DriveSearchLocationQuery, DriveSearchResult, DriveSearchService } from "./driveSearchService";
 import { DrivePanelLocation, RECENT_ROOT, SHARED_WITH_ME_ROOT, STARRED_ROOT, TRASH_ROOT } from "./drivePanelLocation";
 import { matchesTypeCategory, PanelModifiedRange, PanelOwnerOption, PanelTypeCategory } from "./drivePanelFormat";
+import { matchesAllSearchTokens, tokenizePathSearchQuery } from "./searchMatch";
 
 const DRIVE_PANEL_SEARCH_DEBOUNCE_MS = 300;
 export const DRIVE_PANEL_SEARCH_RESULT_LIMIT = 200;
@@ -220,14 +221,29 @@ export class DrivePanelSearchController {
     // drive.google.com ranks search results, instead of leaving index insertion order.
     const fuzzySearch = prepareFuzzySearch(query.normalize("NFC"));
     const scored: Array<{ item: DriveIndexItem; score: number }> = [];
+    const fuzzyIds = new Set<string>();
     for (const item of items) {
       const match = fuzzySearch(item.name.normalize("NFC"));
       if (match !== null) {
         scored.push({ item, score: match.score });
+        fuzzyIds.add(item.id);
       }
     }
     scored.sort((a, b) => b.score - a.score);
-    return scored.map((entry) => entry.item);
+    // Order-independent top-up (same matcher as the search modal's path search): the in-order fuzzy
+    // subsequence match misses reversed-token queries like ".jpg mount" → "mount-….jpg". Append any
+    // item where every whitespace token is a separator-agnostic substring of "name + path" that the
+    // fuzzy pass didn't already rank; these keep index order (modifiedTime desc) after the scored hits.
+    const tokens = tokenizePathSearchQuery(query);
+    const tokenOnly =
+      tokens.length === 0
+        ? []
+        : items.filter(
+            (item) =>
+              !fuzzyIds.has(item.id) &&
+              matchesAllSearchTokens(tokens, item.path ? `${item.name} ${item.path}` : item.name),
+          );
+    return [...scored.map((entry) => entry.item), ...tokenOnly];
   }
 
   ensurePanelIndex(): Promise<DriveIndexItem[]> {
