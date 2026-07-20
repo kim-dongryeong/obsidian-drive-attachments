@@ -1,7 +1,7 @@
 import { Notice } from "obsidian";
 import { createServer, Server } from "http";
 import { DrivePickerItem } from "./driveTypes";
-import { GoogleDriveAttachmentBridgeSettings } from "./settings";
+import { getEffectivePickerAppId, GoogleDriveAttachmentBridgeSettings } from "./settings";
 
 const PICKER_TIMEOUT_MS = 5 * 60_000;
 const FOLDER_MIME = "application/vnd.google-apps.folder";
@@ -29,8 +29,12 @@ export class DrivePickerService {
 
   async pickFileOrFolder(accessToken: string, options?: PickOptions): Promise<DrivePickerItem | null> {
     const settings = this.getSettings();
-    if (!settings.pickerApiKey || !settings.pickerAppId) {
-      throw new Error("Enter the Google Picker API key and project number (App ID) in settings first.");
+    const appId = getEffectivePickerAppId(settings);
+    if (!settings.pickerApiKey || !appId) {
+      throw new Error(
+        "The Google Picker isn't set up (it's optional). Add a Picker API key in settings to enable it, " +
+          "or just browse and insert Drive files from the search command or the Drive panel.",
+      );
     }
 
     // Supersede any earlier pick still waiting — e.g. the user closed the browser
@@ -68,7 +72,7 @@ export class DrivePickerService {
 
         if (request.method === "GET" && (url === "/" || url.startsWith("/?"))) {
           response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-          response.end(renderPickerPage(accessToken, settings.pickerApiKey, settings.pickerAppId, foldersOnly));
+          response.end(renderPickerPage(accessToken, settings.pickerApiKey, appId, foldersOnly));
           return;
         }
 

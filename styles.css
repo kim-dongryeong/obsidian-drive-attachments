@@ -3864,3 +3864,36 @@
   justify-content: flex-end;
   margin-top: 16px;
 }
+
+/* Auto-reconnect "working" status row (settings tab, during re-consent). */
+.gdab-setting-busy {
+  border-left: 3px solid var(--interactive-accent);
+  padding-left: 12px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+}
+.gdab-setting-busy .setting-item-name {
+  color: var(--interactive-accent);
+  font-weight: 600;
+}
+
+/* Separator before the "Advanced options" group so it isn't mistaken for part of the section above. */
+.gdab-settings-sep {
+  border: none;
+  border-top: 1px solid var(--background-modifier-border);
+  margin: 22px 0 4px;
+}
+
+/* Paste-JSON credentials modal. */
+.gdab-paste-json {
+  width: 100%;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  resize: vertical;
+}
+.gdab-paste-json-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}

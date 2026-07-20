@@ -1,4 +1,4 @@
-import { App, debounce, Notice, PluginSettingTab, Setting } from "obsidian";
+import { App, debounce, Modal, Notice, PluginSettingTab, Setting } from "obsidian";
 import { isDriveFolder } from "./driveTypes";
 import {
   ASSET_NOTE_EXTRA_FRONTMATTER_EXAMPLE,
@@ -17,18 +17,152 @@ import {
 } from "./settings";
 import GoogleDriveAttachmentBridgePlugin from "./main";
 
+// Hard cap on an automatic re-consent so a stalled token exchange can't lock the settings tab forever.
+// connect()'s own 120s timeout only covers the browser/loopback step, not the later token/email calls.
+const RECONNECT_TIMEOUT_MS = 150_000;
+
+// Paste-the-JSON alternative to the file picker: someone who was messaged the OAuth-client JSON can
+// paste its contents directly, no file to save/locate. onSubmit gets the raw text (trimmed non-empty).
+class PasteJsonCredentialsModal extends Modal {
+  private raw = "";
+
+  constructor(app: App, private readonly onSubmit: (raw: string) => void | Promise<void>) {
+    super(app);
+  }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: "Paste Google credentials JSON" });
+    contentEl.createEl("p", {
+      text:
+        "Paste the full contents of the OAuth client JSON you downloaded from Google Cloud (or that " +
+        "someone shared with you). It's kept only in this vault — nothing is uploaded.",
+    });
+    const textarea = contentEl.createEl("textarea", { cls: "gdab-paste-json" });
+    textarea.rows = 10;
+    textarea.placeholder = '{ "installed": { "client_id": "…", "client_secret": "…" } }';
+    textarea.addEventListener("input", () => {
+      this.raw = textarea.value;
+    });
+    const buttons = contentEl.createDiv({ cls: "gdab-paste-json-buttons" });
+    buttons.createEl("button", { text: "Import & connect", cls: "mod-cta" }).addEventListener("click", () => {
+      const value = this.raw.trim();
+      if (!value) {
+        new Notice("Paste the JSON first.");
+        return;
+      }
+      this.close();
+      void this.onSubmit(value);
+    });
+    buttons.createEl("button", { text: "Cancel" }).addEventListener("click", () => this.close());
+    textarea.focus();
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
 export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
   private readonly uploadFolderPathCache = new Map<string, string>();
   // Everything the basic list doesn't need is hidden behind the "Advanced options" expander.
   private showAdvanced = false;
+  // While an automatic re-consent is running, holds a short action label; the whole tab renders a
+  // single "working" status instead of the editable settings. Cleared by hide() so a closed+reopened
+  // tab never shows a stuck busy screen.
+  private reconnecting: string | null = null;
+  // True for the actual lifetime of an in-flight connect(). Unlike `reconnecting` it is NOT cleared by
+  // hide(), so closing+reopening Settings mid-consent can't start a second concurrent connect().
+  private connecting = false;
 
   constructor(app: App, private readonly plugin: GoogleDriveAttachmentBridgePlugin) {
     super(app, plugin);
   }
 
+  // Run the OAuth consent (initial connect, reconnect, account switch, or a scope change) for the user
+  // with a paused "working" UI — no manual Disconnect → Connect dance. connect() reuses the stored
+  // Client ID/secret, forces prompt=consent, and overwrites the tokens on success; on failure/timeout
+  // it throws with the previous connection left intact. `busyLabel` is what the status row shows.
+  private async connectWithStatus(busyLabel: string): Promise<void> {
+    // Guard against a second concurrent consent — a rapid double-toggle, or reopening Settings after
+    // hide() cleared the pause label while the first connect() is still in flight.
+    if (this.connecting) {
+      return;
+    }
+    this.connecting = true;
+    this.reconnecting = busyLabel;
+    let timer: number | undefined;
+    try {
+      this.display();
+      const connectPromise = this.plugin.auth.connect();
+      // A late rejection (after our hard timeout already fired) must not surface as unhandled.
+      void connectPromise.catch(() => undefined);
+      const email = await Promise.race([
+        connectPromise,
+        new Promise<never>((_, reject) => {
+          timer = window.setTimeout(() => reject(new Error("Timed out — please try again.")), RECONNECT_TIMEOUT_MS);
+        }),
+      ]);
+      this.plugin.refreshDrivePanelAvailability();
+      new Notice(`✅ Connected as ${email}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message === "Connect cancelled.") {
+        new Notice("Connect cancelled — nothing changed.");
+      } else {
+        new Notice(`❌ ${busyLabel} didn't finish: ${message}. Nothing changed — try again.`, 8000);
+      }
+    } finally {
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+      this.connecting = false;
+      this.reconnecting = null;
+      this.display();
+    }
+  }
+
+  // Reset only the paused-view label if the user closes the settings tab mid-reconnect, so reopening
+  // never shows a stuck "working" screen. `connecting` is deliberately left as-is so an in-flight
+  // connect() still blocks a second one; its own finally clears it (guaranteed within the 150s cap).
+  hide(): void {
+    this.reconnecting = null;
+  }
+
+  // Open the paste-JSON modal; on a valid paste, store the credentials and connect automatically.
+  private openPasteJsonModal(): void {
+    new PasteJsonCredentialsModal(this.app, async (raw) => {
+      if (await this.plugin.applyCredentialsJson(raw)) {
+        await this.connectWithStatus("Connecting to Google Drive");
+      }
+    }).open();
+  }
+
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
+
+    // Paused state during an automatic re-consent: show only a status row (with Cancel) so no other
+    // setting can be touched until the browser consent finishes, is cancelled, or times out.
+    if (this.reconnecting) {
+      new Setting(containerEl).setName("Google Drive connection").setHeading();
+      const busy = new Setting(containerEl)
+        .setName(`🔄 ${this.reconnecting}…`)
+        .setDesc(
+          "Approve the Google sign-in that opened in your browser. Opened in the wrong Chrome profile, " +
+            "or changed your mind? Click Cancel and try again — no need to wait. (It also times out on " +
+            "its own after 2 minutes.)",
+        )
+        .addButton((button) => {
+          button
+            .setButtonText("Cancel")
+            .onClick(() => {
+              this.plugin.auth.cancelConnect();
+            });
+        });
+      busy.settingEl.addClass("gdab-setting-busy");
+      return;
+    }
 
     // Grey a whole setting out (visible opacity from the class, not setDisabled alone).
     const greyOut = (setting: Setting, disabled: boolean): void => {
@@ -44,6 +178,8 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
 
     new Setting(containerEl).setName("Google Drive connection").setHeading();
 
+    const hasCredentials = Boolean(this.plugin.settings.clientId && this.plugin.settings.clientSecret);
+
     if (this.plugin.auth.isConnected) {
       new Setting(containerEl)
         .setName("Status")
@@ -52,8 +188,11 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
         );
 
       new Setting(containerEl)
-        .setName("Disconnect")
-        .setDesc("Remove stored Google OAuth tokens from this plugin's local data.")
+        .setName("Sign out / switch account")
+        .setDesc(
+          "Signs out of Google Drive but keeps your imported credentials, so you can reconnect (or " +
+            "connect a different Google account) with one click — no need to re-import the JSON.",
+        )
         .addButton((button) => {
           button
             .setButtonText("Disconnect")
@@ -61,55 +200,64 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
             .onClick(async () => {
               await this.plugin.auth.disconnect();
               this.plugin.refreshDrivePanelAvailability();
-              new Notice("Disconnected from Google Drive.");
+              new Notice("Signed out. Your credentials are kept — click Connect to sign back in.");
               this.display();
             });
         });
-    } else {
-      new Setting(containerEl)
-        .setName("Client ID")
-        .setDesc("OAuth desktop client ID from Google Cloud Console.")
-        .addText((text) => {
-          text
-            .setPlaceholder("Client ID")
-            .setValue(this.plugin.settings.clientId)
-            .onChange(async (value) => {
-              this.plugin.settings.clientId = value.trim();
-              await this.plugin.saveSettings();
-            });
-        });
-
-      new Setting(containerEl)
-        .setName("Client secret")
-        .setDesc("OAuth desktop client secret. Stored only in this plugin's local, git-ignored data.")
-        .addText((text) => {
-          text.inputEl.type = "password";
-          text
-            .setPlaceholder("Client secret")
-            .setValue(this.plugin.settings.clientSecret)
-            .onChange(async (value) => {
-              this.plugin.settings.clientSecret = value.trim();
-              await this.plugin.saveSettings();
-            });
-        });
-
+    } else if (hasCredentials) {
+      // Credentials already stored (imported earlier, or kept after Disconnect). Reconnect with one
+      // click — no re-selecting the JSON. Covers the wrong-profile/cancelled retry and account switch.
       new Setting(containerEl)
         .setName("Connect")
-        .setDesc("Authenticate with Google Drive once for Drive links, uploads, search, and shared-drive paths.")
+        .setDesc(
+          "Your Google credentials are ready. Click Connect to sign in — the Google consent page opens " +
+            "in your browser. Signing in with a different Google account switches the connected account.",
+        )
         .addButton((button) => {
           button
             .setButtonText("Connect")
             .setCta()
             .onClick(async () => {
-              try {
-                const email = await this.plugin.auth.connect();
-                this.plugin.refreshDrivePanelAvailability();
-                new Notice(`Connected as ${email}`);
-                this.display();
-              } catch (error) {
-                new Notice(`Auth failed: ${error instanceof Error ? error.message : String(error)}`);
+              await this.connectWithStatus("Connecting to Google Drive");
+            });
+        });
+
+      new Setting(containerEl)
+        .setName("Use different credentials")
+        .setDesc("Only if you're switching to a different Google Cloud project — import that project's OAuth JSON instead.")
+        .addButton((button) => {
+          button
+            .setButtonText("Re-import .json file")
+            .onClick(async () => {
+              if (await this.plugin.importCredentialsJson()) {
+                await this.connectWithStatus("Connecting to Google Drive");
               }
             });
+        })
+        .addButton((button) => {
+          button.setButtonText("Paste JSON").onClick(() => this.openPasteJsonModal());
+        });
+    } else {
+      // First run, no credentials yet: import the JSON (file or paste), then connect automatically.
+      new Setting(containerEl)
+        .setName("Connect Google Drive")
+        .setDesc(
+          "One-step setup: select the OAuth client JSON you downloaded from Google Cloud (its “Download " +
+            "JSON” button), or paste its contents. It's kept on your computer — nothing is uploaded — " +
+            "and then the Google sign-in opens automatically.",
+        )
+        .addButton((button) => {
+          button
+            .setButtonText("Select .json file")
+            .setCta()
+            .onClick(async () => {
+              if (await this.plugin.importCredentialsJson()) {
+                await this.connectWithStatus("Connecting to Google Drive");
+              }
+            });
+        })
+        .addButton((button) => {
+          button.setButtonText("Paste JSON").onClick(() => this.openPasteJsonModal());
         });
     }
 
@@ -117,15 +265,17 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
       ? ""
       : this.plugin.auth.hasFullDriveScope
         ? " ✓ Full Drive access is currently granted."
-        : " ⚠ Enabled but not yet granted — reconnect (Disconnect → Connect) to apply.";
+        : this.plugin.auth.isConnected
+          ? " ⚠ Enabled but not yet granted — toggle it off and on to retry the reconnect."
+          : " ⚠ Enabled — it applies next time you connect.";
     new Setting(containerEl)
       .setName("Full Drive access (delete picked/searched files)")
       .setDesc(
         "Off by default, the plugin can only delete files it uploaded itself. Turn this on " +
           "to request the full Drive scope so you can also delete files you picked or searched from " +
           "your existing Drive. This grants read/write/delete over your ENTIRE Drive — only enable it " +
-          "if you understand that. Takes effect after you reconnect, and you must also allow the scope " +
-          "on your own Google Cloud OAuth consent screen." +
+          "if you understand that. Turning it on reconnects you automatically — you approve the scope " +
+          "once in your browser. It must also be allowed on your own Google Cloud OAuth consent screen." +
           fullDriveStatus,
       )
       .addToggle((toggle) => {
@@ -135,14 +285,11 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
             this.plugin.settings.enableFullDriveAccess = value;
             await this.plugin.saveSettings();
             if (this.plugin.auth.isConnected) {
-              new Notice(
-                value
-                  ? "Reconnect Google Drive (Disconnect → Connect) to grant full Drive access."
-                  : "Reconnect Google Drive to drop full Drive access.",
-                8000,
-              );
+              // The scope change only takes effect after a fresh consent — do it automatically.
+              await this.connectWithStatus(value ? "Applying full Drive access" : "Applying standard access");
+            } else {
+              this.display();
             }
-            this.display();
           });
       });
 
@@ -160,43 +307,27 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
             .setButtonText("Grant access")
             .setCta()
             .onClick(async () => {
-              try {
-                const email = await this.plugin.auth.connect();
-                this.plugin.refreshDrivePanelAvailability();
-                new Notice(`Drive read access granted — search is on (${email}).`);
-                this.redisplayPreservingScroll();
-              } catch (error) {
-                new Notice(`Couldn't grant access: ${error instanceof Error ? error.message : String(error)}`);
-              }
+              await this.connectWithStatus("Granting read access for search");
             });
         });
     }
 
-    new Setting(containerEl).setName("Google Picker").setHeading();
+    new Setting(containerEl).setName("Google Picker (optional)").setHeading();
 
     new Setting(containerEl)
       .setName("Picker API key")
-      .setDesc("Google Cloud API key with the Picker API enabled (developer key).")
+      .setDesc(
+        "Optional — only for Google's own file-picker popup. You can already browse and insert Drive " +
+          "files from the search command and the Drive panel without it, so leave this blank to skip " +
+          "the Picker. To enable it, paste a Google Cloud API key with the Picker API turned on.",
+      )
       .addText((text) => {
         text.inputEl.type = "password";
         text
-          .setPlaceholder("API key")
+          .setPlaceholder("API key (optional)")
           .setValue(this.plugin.settings.pickerApiKey)
           .onChange(async (value) => {
             this.plugin.settings.pickerApiKey = value.trim();
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Project number (App ID)")
-      .setDesc("Google Cloud project number — used as the Picker App ID.")
-      .addText((text) => {
-        text
-          .setPlaceholder("123456789012")
-          .setValue(this.plugin.settings.pickerAppId)
-          .onChange(async (value) => {
-            this.plugin.settings.pickerAppId = value.trim();
             await this.plugin.saveSettings();
           });
       });
@@ -533,6 +664,9 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
     // ===================================================================================
     // ADVANCED — behind the expander
     // ===================================================================================
+
+    // Visual break so "Advanced options" reads as its own group, not a trailing part of the section above.
+    containerEl.createEl("hr", { cls: "gdab-settings-sep" });
 
     new Setting(containerEl)
       .setName("Advanced options")

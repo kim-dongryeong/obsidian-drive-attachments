@@ -47,6 +47,15 @@ export class DriveAuthService {
   // token is the durable credential; a fresh access token is minted per session/expiry. Keeps the
   // plaintext-secrets surface of data.json down to clientSecret + (legacy plain) refresh token.
   private cachedAccessToken: { token: string; expiresAt: number } | null = null;
+  // Set while waitForLoopbackCode is pending; lets the UI cancel a connect that opened in the wrong
+  // browser profile without waiting out the 120s timeout. Cleared as soon as the wait settles.
+  private cancelLoopback: (() => void) | null = null;
+
+  // Abort a connect() that's waiting for the browser consent (no-op if nothing is pending). Rejects
+  // the pending connect with a "cancelled" error so the caller can re-enable its UI immediately.
+  cancelConnect(): void {
+    this.cancelLoopback?.();
+  }
 
   get isConnected(): boolean {
     const settings = this.getSettings();
@@ -227,9 +236,13 @@ export class DriveAuthService {
         if (timeoutId !== null) {
           window.clearTimeout(timeoutId);
         }
+        this.cancelLoopback = null;
         targetServer.close();
         done();
       };
+
+      // Expose a cancel hook for the settings UI's Cancel button (wrong-profile / changed-my-mind).
+      this.cancelLoopback = () => finish(server, () => reject(new Error("Connect cancelled.")));
 
       server.listen(0, "127.0.0.1", () => {
         const address = server.address();
@@ -241,7 +254,9 @@ export class DriveAuthService {
         authUrl.searchParams.set("response_type", "code");
         authUrl.searchParams.set("scope", scopes.join(" "));
         authUrl.searchParams.set("access_type", "offline");
-        authUrl.searchParams.set("prompt", "consent");
+        // select_account reliably shows the account chooser (so users can switch Google accounts, not
+        // just silently re-consent the active one); consent forces the refresh-token-granting screen.
+        authUrl.searchParams.set("prompt", "select_account consent");
         authUrl.searchParams.set("state", state);
         authUrl.searchParams.set("code_challenge", codeChallenge);
         authUrl.searchParams.set("code_challenge_method", "S256");

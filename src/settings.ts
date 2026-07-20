@@ -219,6 +219,44 @@ export interface GoogleDriveAttachmentBridgeSettings {
   defaultUploadFolderName: string;
 }
 
+// Google OAuth client IDs have the shape `<projectNumber>-<hash>.apps.googleusercontent.com`, and the
+// Google Picker's App ID *is* that project number. So the App ID is recoverable from the Client ID's
+// leading digits — no separate entry needed. Returns "" when the client ID isn't in that canonical form.
+export function deriveAppIdFromClientId(clientId: string): string {
+  const match = clientId.trim().match(/^(\d+)-/);
+  return match ? match[1] : "";
+}
+
+// The App ID the Picker should use: an explicit override if the user set one, else derived from the
+// Client ID. Lets setup skip the App ID field entirely for standard client IDs.
+export function getEffectivePickerAppId(settings: GoogleDriveAttachmentBridgeSettings): string {
+  return settings.pickerAppId.trim() || deriveAppIdFromClientId(settings.clientId);
+}
+
+// Parse a Google Cloud OAuth-client credentials JSON (the "Download JSON" file) into the two fields we
+// need. Google wraps desktop clients under `installed` and web clients under `web`; both carry
+// client_id + client_secret. Returns null when the file isn't a recognizable OAuth client JSON.
+export function parseOAuthClientJson(raw: string): { clientId: string; clientSecret: string } | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return null;
+  }
+  const root = parsed as Record<string, unknown>;
+  const block = (root.installed ?? root.web) as Record<string, unknown> | undefined;
+  const source = block && typeof block === "object" ? block : root;
+  const clientId = typeof source.client_id === "string" ? source.client_id.trim() : "";
+  const clientSecret = typeof source.client_secret === "string" ? source.client_secret.trim() : "";
+  if (!clientId || !clientSecret) {
+    return null;
+  }
+  return { clientId, clientSecret };
+}
+
 export const DEFAULT_SETTINGS: GoogleDriveAttachmentBridgeSettings = {
   clientId: "",
   clientSecret: "",

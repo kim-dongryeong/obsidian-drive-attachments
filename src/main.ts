@@ -22,7 +22,7 @@ import { PanelDragModifierTracker } from "./panelDragModifierTracker";
 import { ACTIONS_LANGS, PREVIEW_LANGS } from "./codeBlockLang";
 import { InsertService } from "./insertService";
 import { openMigrateNoteAttachmentsPreview } from "./migrateNoteAttachments";
-import { DEFAULT_SETTINGS, GoogleDriveAttachmentBridgeSettings } from "./settings";
+import { DEFAULT_SETTINGS, GoogleDriveAttachmentBridgeSettings, parseOAuthClientJson } from "./settings";
 import { GoogleDriveAttachmentBridgeSettingTab } from "./settingsTab";
 
 interface AppWithSettings {
@@ -762,6 +762,38 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
     }
   }
 
+  async importCredentialsJson(): Promise<boolean> {
+    const file = await chooseLocalFile(".json,application/json");
+    if (!file) {
+      return false;
+    }
+    let raw: string;
+    try {
+      raw = await file.text();
+    } catch (error) {
+      new Notice(`Couldn't read that file: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+    return this.applyCredentialsJson(raw);
+  }
+
+  // Store the Client ID + secret parsed from an OAuth-client JSON string — a downloaded file's contents
+  // or text pasted into the settings modal. App ID needs no entry (it's derived from the Client ID) so
+  // any stale override is cleared. Returns false (with a Notice) when the text isn't a valid client JSON.
+  async applyCredentialsJson(raw: string): Promise<boolean> {
+    const creds = parseOAuthClientJson(raw);
+    if (!creds) {
+      new Notice("That isn't a Google OAuth client JSON (no client_id / client_secret found).");
+      return false;
+    }
+    this.settings.clientId = creds.clientId;
+    this.settings.clientSecret = creds.clientSecret;
+    this.settings.pickerAppId = "";
+    await this.saveSettings();
+    new Notice("Credentials imported from JSON.");
+    return true;
+  }
+
   async importIconPackFromJson(): Promise<void> {
     try {
       const result = await this.customIconPack.importFromJson();
@@ -790,11 +822,11 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
   }
 }
 
-function chooseLocalFile(): Promise<File | null> {
+function chooseLocalFile(accept?: string): Promise<File | null> {
   return new Promise((resolve) => {
     const input = createEl("input", {
       cls: "gdab-hidden-file-input",
-      attr: { type: "file" },
+      attr: accept ? { type: "file", accept } : { type: "file" },
     });
     const finish = (file: File | null): void => {
       resolve(file);
