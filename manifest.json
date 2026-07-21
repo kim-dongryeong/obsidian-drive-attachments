@@ -1,10 +1,10 @@
 {
-  "id": "drive-attachments",
-  "name": "Drive Attachments",
-  "version": "0.73.6",
-  "minAppVersion": "1.7.2",
-  "description": "Search Google Drive and insert durable Drive-link notes, and upload dropped files to Drive instead of the vault — with content-hash dedup.",
-  "author": "Kim Dongryeong",
-  "authorUrl": "https://github.com/kim-dongryeong",
-  "isDesktopOnly": true
+	"id": "drive-attachments",
+	"name": "Drive Attachments",
+	"version": "0.74.0",
+	"minAppVersion": "1.7.2",
+	"description": "Search Google Drive and insert durable Drive-link notes, and upload dropped files to Drive instead of the vault — with content-hash dedup.",
+	"author": "Kim Dongryeong",
+	"authorUrl": "https://github.com/kim-dongryeong",
+	"isDesktopOnly": true
 }
