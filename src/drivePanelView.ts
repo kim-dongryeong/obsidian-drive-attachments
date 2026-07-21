@@ -2308,6 +2308,24 @@ export class DrivePanelView extends ItemView {
       menu.addItem((mi) =>
         mi.setTitle("Change folder color...").setIcon("palette").onClick(() => this.openFolderColorPicker(item)),
       );
+      // Pair of the settings-tab picker: set the default upload target from the folder you're already
+      // looking at. Shown checked+disabled when this folder is already the target.
+      const isDefaultUploadFolder = this.getSettings().defaultUploadFolderId === item.id;
+      menu.addItem((mi) =>
+        mi
+          .setTitle(isDefaultUploadFolder ? "Default upload folder ✓" : "Set as default upload folder")
+          .setIcon("folder-up")
+          .setDisabled(isDefaultUploadFolder)
+          .onClick(() => {
+            void (async () => {
+              const settings = this.getSettings();
+              settings.defaultUploadFolderId = item.id;
+              settings.defaultUploadFolderName = item.name;
+              await this.saveSettings();
+              new Notice(`Default upload folder: ${item.name}`);
+            })();
+          }),
+      );
     }
 
     // File information group — reveal and focus the existing bottom details bar for this row. When
