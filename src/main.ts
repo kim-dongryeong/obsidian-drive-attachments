@@ -48,6 +48,9 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
   // Shared by the panel (start/stop per row drag), the capture-phase dragover (picks the dropEffect the
   // macOS modifier expects so the OS accepts the drop), and the editor-drop (reads the drop-time mode).
   panelDragModifiers!: PanelDragModifierTracker;
+  // Memoized in-flight promise for ensureDefaultUploadFolder() so concurrent first uploads (e.g. a
+  // multi-file drop) can't race and each create their own "Obsidian Drive Attachments" folder.
+  private ensureDefaultUploadFolderPromise: Promise<{ folderId: string | undefined; created: boolean }> | null = null;
 
   onunload(): void {
     // Release preview blob URLs / cached data URLs so their byte buffers can be GC'd.
@@ -126,7 +129,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
       this.forceRefreshDrivePreviews();
     });
     this.panelDragModifiers = new PanelDragModifierTracker();
-    this.dropController = new DropController(this.app, this.upload, this.insert, this.dedup, this.metadata, () => this.settings, this.panelDragModifiers);
+    this.dropController = new DropController(this.app, this.upload, this.insert, this.dedup, this.metadata, () => this.settings, this.panelDragModifiers, () => this.ensureDefaultUploadFolder());
 
     this.addSettingTab(new GoogleDriveAttachmentBridgeSettingTab(this.app, this));
     this.registerView(
@@ -279,7 +282,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
           return canRun;
         }
 
-        openMigrateNoteAttachmentsPreview(this.app, this.dedup, this.upload, this.insert, this.settings);
+        openMigrateNoteAttachmentsPreview(this.app, this.dedup, this.upload, this.insert, this.settings, () => this.ensureDefaultUploadFolder());
         return true;
       },
     });
@@ -382,13 +385,14 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
           const placeholder = makeUploadPlaceholder(file.name);
           editor.replaceSelection(placeholder);
           new Notice(`Uploading to Google Drive: ${file.name}`);
+          const { folderId: parentFolderId, created: createdDefaultFolder } = await this.ensureDefaultUploadFolder();
           let result: DriveUploadResult;
           try {
             result = await this.upload.uploadFile({
               name: file.name,
               mimeType: file.type || "application/octet-stream",
               source,
-              parentFolderId: this.settings.defaultUploadFolderId || undefined,
+              parentFolderId,
             });
           } catch (error) {
             replacePlaceholder(editor, placeholder, `**⚠️ Drive upload failed: ${file.name}**`);
@@ -406,6 +410,12 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
             );
           } else {
             new Notice(`Uploaded to Google Drive: ${result.item.name}`);
+            if (createdDefaultFolder) {
+              new Notice(
+                "Uploaded to the new “Obsidian Drive Attachments” folder in your Drive. You can change where uploads go in Settings → Default upload folder.",
+                10000,
+              );
+            }
           }
         } catch (error) {
           new Notice(`Upload to Drive failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -499,6 +509,40 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
         }
       }),
     );
+  }
+
+  // First-upload auto-folder (root stays clean): when no default upload folder is set, find-or-create
+  // an "Obsidian Drive Attachments" folder in My Drive root, save it as the default, and return it.
+  // `created` is true both when the folder is freshly created AND when an existing one is adopted for
+  // the first time — either way the caller should tell the user once. Memoized on
+  // ensureDefaultUploadFolderPromise so concurrent uploads (a multi-file drop) can't create two
+  // folders; any Drive error falls back to { folderId: undefined, created: false } (upload to root)
+  // rather than ever blocking the upload.
+  async ensureDefaultUploadFolder(): Promise<{ folderId: string | undefined; created: boolean }> {
+    if (this.settings.defaultUploadFolderId) {
+      return { folderId: this.settings.defaultUploadFolderId, created: false };
+    }
+    if (!this.ensureDefaultUploadFolderPromise) {
+      this.ensureDefaultUploadFolderPromise = this.createOrAdoptDefaultUploadFolder().finally(() => {
+        this.ensureDefaultUploadFolderPromise = null;
+      });
+    }
+    return this.ensureDefaultUploadFolderPromise;
+  }
+
+  private async createOrAdoptDefaultUploadFolder(): Promise<{ folderId: string | undefined; created: boolean }> {
+    const folderName = "Obsidian Drive Attachments";
+    try {
+      const existingId = await this.upload.findFolderByName(folderName);
+      const folderId = existingId ?? (await this.upload.createFolder(folderName));
+      this.settings.defaultUploadFolderId = folderId;
+      this.settings.defaultUploadFolderName = folderName;
+      await this.saveSettings();
+      return { folderId, created: true };
+    } catch (error) {
+      console.warn("[Drive Attachments] Could not create/adopt the default upload folder; uploading to root.", error);
+      return { folderId: undefined, created: false };
+    }
   }
 
   // Dedup must never block an upload (DONE-WHEN "Non-blocking + safe"): DriveDedupService already

@@ -2583,6 +2583,7 @@ export class DrivePanelView extends ItemView {
       initialPath: this.folderPickerInitialPath(),
       excludedFolderIds,
       excludedNotice: "Choose a folder outside the selected folders.",
+      createFolder: (name, parent) => this.upload.createFolder(name, parent),
       onChoose: (target) => {
         void this.moveItems(items, source, target);
       },
@@ -2606,6 +2607,7 @@ export class DrivePanelView extends ItemView {
       metadata: this.metadata,
       roots: this.folderPickerRoots(),
       initialPath: this.folderPickerInitialPath(),
+      createFolder: (name, parent) => this.upload.createFolder(name, parent),
       onChoose: (target) => {
         void this.copyItems(copyable, target);
       },

@@ -367,6 +367,9 @@ export interface PanelFolderPickerOptions {
   excludedFolderIds?: Set<string>;
   excludedNotice?: string;
   onChoose: (folder: DrivePanelLocation) => void;
+  // Optional "New folder" affordance in the picker's button row: creates a folder under the currently
+  // browsed location (undefined = My Drive root) and returns its id. Absent → the button is hidden.
+  createFolder?: (name: string, parentFolderId: string | undefined) => Promise<string>;
 }
 
 export class PanelFolderPickerModal extends Modal {
@@ -417,10 +420,38 @@ export class PanelFolderPickerModal extends Modal {
     }
 
     const buttons = contentEl.createDiv({ cls: "gdab-folder-picker-buttons" });
+    if (this.options.createFolder) {
+      const newFolderButton = buttons.createEl("button", { text: "New folder" });
+      newFolderButton.disabled = this.loading;
+      newFolderButton.addEventListener("click", () => this.openNewFolderModal());
+    }
     buttons.createEl("button", { text: "Cancel" }).addEventListener("click", () => this.close());
     const chooseButton = buttons.createEl("button", { cls: "mod-cta", text: this.options.actionLabel });
     chooseButton.disabled = this.loading || this.isExcluded(this.currentLocation.id);
     chooseButton.addEventListener("click", () => this.chooseCurrentFolder());
+  }
+
+  // Creates a folder under the currently browsed location (undefined = My Drive root, matching
+  // createFolder's own parentFolderId convention), then refreshes the current listing and navigates
+  // into the new folder.
+  private openNewFolderModal(): void {
+    const createFolder = this.options.createFolder;
+    if (!createFolder) {
+      return;
+    }
+    const breadcrumb = this.path.map((location) => location.name).join(" / ");
+    const parentFolderId = this.currentLocation.id === MY_DRIVE_ROOT.id ? undefined : this.currentLocation.id;
+    new NewDriveFolderModal(this.app, breadcrumb, (name) => {
+      void (async () => {
+        try {
+          const folderId = await createFolder(name, parentFolderId);
+          this.path.push({ id: folderId, name });
+          await this.loadCurrentFolder();
+        } catch (error) {
+          new Notice(`Couldn't create folder: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      })();
+    }).open();
   }
 
   private renderRootSelect(contentEl: HTMLElement): void {

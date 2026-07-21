@@ -35,6 +35,11 @@ export class DropController {
     private readonly metadata: DriveMetadataService,
     private readonly getSettings: () => GoogleDriveAttachmentBridgeSettings,
     private readonly panelDragModifiers: PanelDragModifierTracker,
+    // First-upload auto-folder (root stays clean): resolves the default upload folder, creating/adopting
+    // an "Obsidian Drive Attachments" folder in My Drive root on the very first upload. Injected from
+    // main.ts (wraps plugin.ensureDefaultUploadFolder) so this controller stays free of Plugin/settings
+    // persistence concerns.
+    private readonly ensureDefaultUploadFolder: () => Promise<{ folderId: string | undefined; created: boolean }>,
   ) {}
 
   /**
@@ -264,7 +269,10 @@ export class DropController {
     editor.setCursor(editor.offsetToPos(editor.posToOffset(dropPosition) + placeholderText.length));
     new Notice(`Uploading ${files.length} dropped file(s) to Google Drive…`);
 
-    const parentFolderId = this.getSettings().defaultUploadFolderId || undefined;
+    const { folderId: parentFolderId, created: createdDefaultFolder } = await this.ensureDefaultUploadFolder();
+    // Only shown once per creation (created is only true on the call that created/adopted the folder),
+    // even though this loop may upload several files against the same resolved folderId.
+    let announcedDefaultFolder = false;
 
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index];
@@ -314,6 +322,13 @@ export class DropController {
           );
         } else {
           new Notice(`Uploaded to Google Drive: ${result.item.name}`);
+          if (createdDefaultFolder && !announcedDefaultFolder) {
+            announcedDefaultFolder = true;
+            new Notice(
+              "Uploaded to the new “Obsidian Drive Attachments” folder in your Drive. You can change where uploads go in Settings → Default upload folder.",
+              10000,
+            );
+          }
         }
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);

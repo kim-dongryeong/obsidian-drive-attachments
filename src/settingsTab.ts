@@ -65,6 +65,51 @@ class PasteJsonCredentialsModal extends Modal {
   }
 }
 
+// Small modal for entering a Drive folder link/ID for a setting (currently: default upload folder)
+// without keeping the raw ID visible in a persistent text field. Follows PasteJsonCredentialsModal's
+// shape: one input, hint text, OK/Cancel. onSubmit gets the raw (possibly empty) trimmed value.
+class FolderLinkOrIdModal extends Modal {
+  private value: string;
+
+  constructor(app: App, currentValue: string, private readonly onSubmit: (value: string) => void | Promise<void>) {
+    super(app);
+    this.value = currentValue;
+  }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: "Folder link or ID" });
+    contentEl.createEl("p", {
+      text: "Paste a folder link from drive.google.com, or its ID. Leave empty to use Drive root.",
+      cls: "setting-item-description",
+    });
+    const input = contentEl.createEl("input", { type: "text", cls: "gdab-folder-link-input" });
+    input.value = this.value;
+    input.addEventListener("input", () => {
+      this.value = input.value;
+    });
+    input.addEventListener("keydown", (evt) => {
+      if (evt.key === "Enter") {
+        evt.preventDefault();
+        this.submit();
+      }
+    });
+    const buttons = contentEl.createDiv({ cls: "gdab-folder-link-buttons" });
+    buttons.createEl("button", { text: "OK", cls: "mod-cta" }).addEventListener("click", () => this.submit());
+    buttons.createEl("button", { text: "Cancel" }).addEventListener("click", () => this.close());
+    window.setTimeout(() => input.focus(), 0);
+  }
+
+  private submit(): void {
+    this.close();
+    void this.onSubmit(this.value.trim());
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
 export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
   private readonly uploadFolderPathCache = new Map<string, string>();
   // Everything the basic list doesn't need is hidden behind the "Advanced options" expander.
@@ -73,6 +118,13 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
   // single "working" status instead of the editable settings — including on a closed+reopened tab,
   // since a live connect() is still in flight and a second concurrent one must not be allowed to start.
   private connectBusy: string | null = null;
+  // Picker API key collapsed state (Change D): once a key is saved, the row shows a "✅ Saved" summary
+  // instead of the raw key. Set true via the [Change] button to reveal the password field again;
+  // simplest-correct choice — it is NOT reset back to false on every display() (that would collapse the
+  // field while the user is still typing into it), only when [Change]'s own flow is done. A fresh
+  // Settings open after that still shows the ✅ state because this is instance state reset only by a
+  // fresh SettingTab instance (i.e. the next time Settings is opened after being fully closed).
+  private revealPickerKey = false;
 
   constructor(app: App, private readonly plugin: GoogleDriveAttachmentBridgePlugin) {
     super(app, plugin);
@@ -278,23 +330,51 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
 
     new Setting(containerEl).setName("Google Picker (optional)").setHeading();
 
-    new Setting(containerEl)
-      .setName("Picker API key")
-      .setDesc(
-        "Optional — only for Google's own file-picker popup. You can already browse and insert Drive " +
-          "files from the search command and the Drive panel without it, so leave this blank to skip " +
-          "the Picker. To enable it, paste a Google Cloud API key with the Picker API turned on.",
-      )
-      .addText((text) => {
-        text.inputEl.type = "password";
-        text
-          .setPlaceholder("API key (optional)")
-          .setValue(this.plugin.settings.pickerApiKey)
-          .onChange(async (value) => {
-            this.plugin.settings.pickerApiKey = value.trim();
-            await this.plugin.saveSettings();
-          });
-      });
+    if (this.plugin.settings.pickerApiKey && !this.revealPickerKey) {
+      new Setting(containerEl)
+        .setName("Picker API key")
+        .setDesc("✅ Saved — Google Picker is enabled.")
+        .addButton((button) => {
+          button
+            .setButtonText("Change")
+            .onClick(() => {
+              this.revealPickerKey = true;
+              this.redisplayPreservingScroll();
+            });
+        })
+        .addButton((button) => {
+          button
+            .setButtonText("Remove")
+            .onClick(async () => {
+              this.plugin.settings.pickerApiKey = "";
+              await this.plugin.saveSettings();
+              this.redisplayPreservingScroll();
+            });
+        });
+    } else {
+      new Setting(containerEl)
+        .setName("Picker API key")
+        .setDesc(
+          "Optional — only for Google's own file-picker popup. You can already browse and insert Drive " +
+            "files from the search command and the Drive panel without it, so leave this blank to skip " +
+            "the Picker. To enable it, paste a Google Cloud API key with the Picker API turned on.",
+        )
+        .addText((text) => {
+          text.inputEl.type = "password";
+          text
+            .setPlaceholder("API key (optional)")
+            .setValue(this.plugin.settings.pickerApiKey)
+            .onChange(async (value) => {
+              this.plugin.settings.pickerApiKey = value.trim();
+              await this.plugin.saveSettings();
+              // Collapse back to the ✅ summary once a key is entered — see revealPickerKey's comment
+              // above for why this doesn't force an immediate re-render mid-keystroke.
+              if (this.plugin.settings.pickerApiKey) {
+                this.revealPickerKey = false;
+              }
+            });
+        });
+    }
 
     new Setting(containerEl).setName("Icons & appearance").setHeading();
 
@@ -405,11 +485,9 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
     const uploadFolderSetting = new Setting(containerEl)
       .setName("Default upload folder")
       .setDesc(
-        (this.plugin.settings.defaultUploadFolderId
-          ? `Uploads go to: ${this.plugin.settings.defaultUploadFolderName || this.plugin.settings.defaultUploadFolderId}.`
-          : "Uploads go to your Google Drive root.") +
-          " Pick a folder with the folder button, or paste a folder's link (or ID) from drive.google.com — " +
-          "the ID is extracted automatically. Leave empty for Drive root.",
+        this.plugin.settings.defaultUploadFolderId
+          ? `Uploads go to: ${this.plugin.settings.defaultUploadFolderName || "the folder below"}.`
+          : "Uploads go to your Google Drive root — the first upload will create an “Obsidian Drive Attachments” folder there for you.",
       )
       .addButton((button) => {
         button
@@ -437,6 +515,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
               metadata: this.plugin.metadata,
               roots,
               initialPath: [{ ...MY_DRIVE_ROOT }],
+              createFolder: (name, parent) => this.plugin.upload.createFolder(name, parent),
               onChoose: (folder) => {
                 void (async () => {
                   this.uploadFolderPathCache.delete(this.plugin.settings.defaultUploadFolderId);
@@ -450,21 +529,25 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
             }).open();
           });
       })
-      .addText((text) => {
-        text
-          .setPlaceholder("Folder link or ID — empty = Drive root")
-          .setValue(this.plugin.settings.defaultUploadFolderId)
-          .onChange(async (value) => {
-            const folderId = normalizeDriveFolderId(value);
-            // If the user pasted a folder URL, reflect the extracted ID back into the field so they
-            // can see what was actually stored (setValue does not re-fire onChange, so no recursion).
-            if (folderId !== value.trim()) {
-              text.setValue(folderId);
-            }
-            this.uploadFolderPathCache.delete(this.plugin.settings.defaultUploadFolderId);
-            this.plugin.settings.defaultUploadFolderId = folderId;
-            this.plugin.settings.defaultUploadFolderName = "";
-            await this.plugin.saveSettings();
+      .addButton((button) => {
+        button
+          .setIcon("link")
+          .setTooltip("Enter folder link or ID")
+          .onClick(() => {
+            new FolderLinkOrIdModal(this.app, this.plugin.settings.defaultUploadFolderId, async (value) => {
+              const folderId = normalizeDriveFolderId(value);
+              this.uploadFolderPathCache.delete(this.plugin.settings.defaultUploadFolderId);
+              if (!folderId) {
+                this.plugin.settings.defaultUploadFolderId = "";
+                this.plugin.settings.defaultUploadFolderName = "";
+              } else {
+                this.plugin.settings.defaultUploadFolderId = folderId;
+                this.plugin.settings.defaultUploadFolderName = "";
+              }
+              await this.plugin.saveSettings();
+              new Notice(folderId ? "Default upload folder updated." : "Default upload folder cleared — uploads go to Drive root.");
+              this.redisplayPreservingScroll();
+            }).open();
           });
       });
     this.appendUploadFolderPath(uploadFolderSetting.descEl);
@@ -934,7 +1017,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
 
     const cachedPath = this.uploadFolderPathCache.get(folderId);
     if (cachedPath) {
-      descEl.createDiv({ cls: "gdab-upload-folder-path", text: cachedPath });
+      descEl.createDiv({ cls: "gdab-upload-folder-path", text: `✅ ${cachedPath}` });
       return;
     }
 
@@ -953,7 +1036,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
         }
         const folderPath = `${ancestorPath}/${metadata.name}`;
         this.uploadFolderPathCache.set(folderId, folderPath);
-        descEl.createDiv({ cls: "gdab-upload-folder-path", text: folderPath });
+        descEl.createDiv({ cls: "gdab-upload-folder-path", text: `✅ ${folderPath}` });
       } catch {
         // Best-effort only — leave the description as-is when the lookup fails.
       }

@@ -3897,3 +3897,15 @@
   justify-content: flex-end;
   margin-top: 12px;
 }
+
+/* Folder link/ID entry modal (default upload folder). */
+.gdab-folder-link-input {
+  width: 100%;
+  margin-top: 8px;
+}
+.gdab-folder-link-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
