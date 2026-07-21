@@ -555,7 +555,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
             this.settings.defaultUploadFolderId = folder.id;
             this.settings.defaultUploadFolderName = folder.name;
             await this.saveSettings();
-            new Notice(`Default upload folder: ${folder.name || "set"} — change it anytime in Settings.`);
+            new Notice(`Default upload folder: ${folder.name} — change it anytime in Settings.`);
             resolve(folder.id);
           })();
         },

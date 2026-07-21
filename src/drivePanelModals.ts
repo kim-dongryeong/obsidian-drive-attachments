@@ -5,7 +5,7 @@
 
 import { App, Modal, Notice, setIcon } from "obsidian";
 import { DRIVE_FOLDER_MIME_TYPE } from "./driveTypes";
-import { DriveBrowserItem, DriveBrowserPage, DriveMetadataService } from "./driveMetadataService";
+import { DriveBrowserItem, DriveBrowserPage, DriveMetadata, DriveMetadataService } from "./driveMetadataService";
 import { formatCount } from "./drivePanelText";
 import { describePanelDropItems } from "./drivePanelDropUtil";
 import { folderColorHex } from "./drivePanelFormat";
@@ -457,14 +457,24 @@ export class PanelFolderPickerModal extends Modal {
     const row = contentEl.createDiv({
       cls: `gdab-folder-picker-link-row${this.linkEntryExpanded ? " is-expanded" : ""}`,
     });
-    const toggle = row.createEl("button", { cls: "gdab-folder-picker-link-toggle" });
+    const toggle = row.createDiv({
+      cls: "gdab-folder-picker-link-toggle",
+      attr: { role: "button", tabindex: "0" },
+    });
     const chevron = toggle.createSpan({ cls: "gdab-folder-picker-link-chevron", attr: { "aria-hidden": "true" } });
     setIcon(chevron, "chevron-right");
     toggle.createSpan({ text: "Use a folder link or ID" });
     toggle.setAttribute("aria-expanded", String(this.linkEntryExpanded));
-    toggle.addEventListener("click", () => {
+    const toggleExpanded = (): void => {
       this.linkEntryExpanded = !this.linkEntryExpanded;
       this.render();
+    };
+    toggle.addEventListener("click", toggleExpanded);
+    toggle.addEventListener("keydown", (evt) => {
+      if (evt.key === "Enter" || evt.key === " ") {
+        evt.preventDefault();
+        toggleExpanded();
+      }
     });
 
     if (!this.linkEntryExpanded) {
@@ -497,15 +507,30 @@ export class PanelFolderPickerModal extends Modal {
     window.setTimeout(() => input.focus(), 0);
   }
 
+  // Opens the pasted folder link/ID inside the modal (rather than confirming immediately) so the
+  // user sees its real name and contents before committing via the normal action button.
   private confirmLinkEntry(): void {
     const folderId = normalizeDriveFolderId(this.linkEntryValue);
     if (!folderId) {
       new Notice("Enter a folder link or ID.");
       return;
     }
-    this.chosen = true;
-    this.close();
-    this.options.onChoose({ id: folderId, name: "" });
+    void (async () => {
+      let metadata: DriveMetadata;
+      try {
+        metadata = await this.options.metadata.getFileMetadata(folderId);
+      } catch {
+        new Notice("Couldn't open that folder — check the link or ID.");
+        return;
+      }
+      if (metadata.mimeType !== DRIVE_FOLDER_MIME_TYPE) {
+        new Notice("That link isn't a folder.");
+        return;
+      }
+      this.path = [{ id: folderId, name: metadata.name }];
+      this.linkEntryExpanded = false;
+      await this.loadCurrentFolder();
+    })();
   }
 
   // Creates a folder under the currently browsed location (undefined = My Drive root, matching

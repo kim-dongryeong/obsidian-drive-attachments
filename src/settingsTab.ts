@@ -237,7 +237,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
     const fullDriveStatus = !this.plugin.settings.enableFullDriveAccess
       ? ""
       : this.plugin.auth.hasFullDriveScope
-        ? " ✓ Full Drive access is currently granted."
+        ? " ✅ Full Drive access is currently granted."
         : this.plugin.auth.isConnected
           ? " ⚠ Enabled but not yet granted — toggle it off and on to retry the reconnect."
           : " ⚠ Enabled — it applies next time you connect.";
@@ -442,12 +442,11 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
       .setDesc(
         this.plugin.settings.defaultUploadFolderId
           ? ""
-          : "You'll choose a folder the first time you upload.",
+          : "No folder chosen yet.",
       )
       .addButton((button) => {
         button
-          .setIcon("folder-open")
-          .setTooltip("Browse Drive folders")
+          .setButtonText("Choose folder")
           .onClick(async () => {
             if (!this.plugin.auth.isConnected) {
               new Notice("Connect Google Drive first to browse folders.");
@@ -478,7 +477,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
                   this.plugin.settings.defaultUploadFolderId = folder.id;
                   this.plugin.settings.defaultUploadFolderName = folder.name;
                   await this.plugin.saveSettings();
-                  new Notice(`Default upload folder: ${folder.name || "set"}`);
+                  new Notice(`Default upload folder: ${folder.name}`);
                   this.redisplayPreservingScroll();
                 })();
               },
