@@ -484,7 +484,7 @@ export class PanelFolderPickerModal extends Modal {
     const linkBody = row.createDiv({ cls: "gdab-folder-picker-link-body" });
     linkBody.createEl("p", {
       cls: "gdab-folder-picker-link-hint",
-      text: "Paste a folder link from drive.google.com, or its ID.",
+      text: "Paste a folder link from drive.google.com, or its ID, to open the folder above.",
     });
     const inputRow = linkBody.createDiv({ cls: "gdab-folder-picker-link-input-row" });
     const input = inputRow.createEl("input", {
@@ -502,7 +502,7 @@ export class PanelFolderPickerModal extends Modal {
         this.confirmLinkEntry();
       }
     });
-    const confirmButton = inputRow.createEl("button", { cls: "mod-cta", text: "Use folder" });
+    const confirmButton = inputRow.createEl("button", { cls: "mod-cta", text: "Open" });
     confirmButton.addEventListener("click", () => this.confirmLinkEntry());
     window.setTimeout(() => input.focus(), 0);
   }
@@ -527,7 +527,18 @@ export class PanelFolderPickerModal extends Modal {
         new Notice("That link isn't a folder.");
         return;
       }
-      this.path = [{ id: folderId, name: metadata.name }];
+      let chain: Array<{ id: string; name: string }> | null = null;
+      try {
+        chain = await this.options.metadata.resolveFolderLocationChain(folderId);
+      } catch {
+        chain = null;
+      }
+      this.path =
+        chain ??
+        [
+          metadata.driveId ? { id: metadata.driveId, name: "Shared drive" } : { ...MY_DRIVE_ROOT },
+          { id: folderId, name: metadata.name },
+        ];
       this.linkEntryExpanded = false;
       await this.loadCurrentFolder();
     })();
@@ -569,7 +580,14 @@ export class PanelFolderPickerModal extends Modal {
     for (const root of this.options.roots) {
       select.createEl("option", { text: root.name, value: root.id });
     }
-    select.value = this.path[0]?.id ?? MY_DRIVE_ROOT.id;
+    const currentRoot = this.path[0];
+    if (currentRoot && !this.options.roots.some((root) => root.id === currentRoot.id)) {
+      // Best-effort roots fetch didn't include this location's root (e.g. a shared drive missing
+      // from the list) — append a temporary option so the dropdown shows the real root instead of
+      // rendering blank.
+      select.createEl("option", { text: currentRoot.name, value: currentRoot.id });
+    }
+    select.value = currentRoot?.id ?? MY_DRIVE_ROOT.id;
     select.addEventListener("change", () => {
       const root = this.options.roots.find((candidate) => candidate.id === select.value) ?? { ...MY_DRIVE_ROOT };
       this.path = [{ id: root.id, name: root.name }];

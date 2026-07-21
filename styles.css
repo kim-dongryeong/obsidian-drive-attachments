@@ -12,6 +12,10 @@
  *     .gdab-drive-search-result-actions  right-side row actions
  */
 
+.gdab-setting-status {
+  margin-top: 4px;
+}
+
 .gdab-drive-search-result {
   display: flex;
   align-items: flex-start;

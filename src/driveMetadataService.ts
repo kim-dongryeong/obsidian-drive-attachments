@@ -318,6 +318,77 @@ export class DriveMetadataService {
     return names.length > 0 ? names.join("/") : null;
   }
 
+  // Resolve the full breadcrumb ancestor chain for a folder, ROOT-FIRST, ending with the folder
+  // itself — used by the folder picker's "Use a folder link or ID" entry point so the root <select>
+  // and breadcrumb can be populated the same way a normal browse-in would populate them. Walks
+  // parents upward with the same visited-set + depth cap as `resolveDrivePathByParents`, stopping at
+  // the first unreadable/missing parent and keeping the readable tail. Returns null only when the
+  // folder itself can't be fetched.
+  async resolveFolderLocationChain(folderId: string): Promise<Array<{ id: string; name: string }> | null> {
+    const accessToken = await this.auth.getAccessToken();
+    const self = await this.getFolderForPath(folderId, accessToken);
+    if (!self) {
+      return null;
+    }
+
+    // `ancestors` holds only the WALKED parent chain (root-first), never the folder itself — kept
+    // separate so the folder is never accidentally dropped when zero ancestors are readable.
+    const ancestorIds: string[] = [];
+    const ancestorNames: string[] = [];
+    const visited = new Set<string>([folderId]);
+    let sharedDriveId = isNonEmptyString(self.driveId) ? self.driveId : undefined;
+    let parents: string[] | undefined = self.parents;
+
+    for (let depth = 0; depth < 50 && parents && parents.length > 0; depth += 1) {
+      const parentId = parents[0];
+      if (visited.has(parentId)) {
+        break;
+      }
+      visited.add(parentId);
+
+      const folder = await this.getFolderForPath(parentId, accessToken);
+      if (!folder) {
+        break;
+      }
+      if (isNonEmptyString(folder.driveId)) {
+        sharedDriveId = folder.driveId;
+      }
+      ancestorIds.unshift(parentId);
+      ancestorNames.unshift(folder.name);
+      parents = folder.parents;
+    }
+
+    const leaf = { id: folderId, name: self.name };
+
+    if (sharedDriveId) {
+      const sharedDriveName = await this.getSharedDriveName(sharedDriveId, accessToken);
+      // Drop the walked pseudo-root named "Drive" (if present) and replace it with the shared
+      // drive's own id/name so it matches the picker's shared-drive root <option>.
+      const dropPseudoRoot = ancestorNames[0] === "Drive";
+      const tailIds = dropPseudoRoot ? ancestorIds.slice(1) : ancestorIds;
+      const tailNames = dropPseudoRoot ? ancestorNames.slice(1) : ancestorNames;
+      const rootName = sharedDriveName ?? "Shared drive";
+      return [
+        { id: sharedDriveId, name: rootName },
+        ...tailIds.map((id, index) => ({ id, name: tailNames[index] })),
+        leaf,
+      ];
+    }
+
+    // My-Drive case: the first element must be exactly MY_DRIVE_ROOT ({ id: "root", name: "My Drive" })
+    // so it matches the picker's My Drive root <option>. The walk reaches the literal "root" alias id
+    // when it climbs all the way up (its real ancestor entry is {id:"root", name:"My Drive"} already);
+    // drop that entry (and any unreadable head before it) and replace with the canonical constant.
+    const dropWalkedRoot = ancestorIds[0] === "root";
+    const tailIds = dropWalkedRoot ? ancestorIds.slice(1) : ancestorIds;
+    const tailNames = dropWalkedRoot ? ancestorNames.slice(1) : ancestorNames;
+    return [
+      { id: "root", name: "My Drive" },
+      ...tailIds.map((id, index) => ({ id, name: tailNames[index] })),
+      leaf,
+    ];
+  }
+
   // Fetch a single folder's name + parents for path resolution. Never throws and never surfaces a
   // Notice: a non-readable/transient folder simply ends the walk (caller keeps the readable tail).
   private async getFolderForPath(

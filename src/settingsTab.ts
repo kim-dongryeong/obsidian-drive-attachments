@@ -237,17 +237,16 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
     const fullDriveStatus = !this.plugin.settings.enableFullDriveAccess
       ? ""
       : this.plugin.auth.hasFullDriveScope
-        ? " ✅ Full Drive access is currently granted."
+        ? "✅ Full Drive access is currently granted."
         : this.plugin.auth.isConnected
-          ? " ⚠ Enabled but not yet granted — toggle it off and on to retry the reconnect."
-          : " ⚠ Enabled — it applies next time you connect.";
-    new Setting(containerEl)
+          ? "⚠ Enabled but not yet granted — toggle it off and on to retry the reconnect."
+          : "⚠ Enabled — it applies next time you connect.";
+    const fullDriveAccessSetting = new Setting(containerEl)
       .setName("Full Drive access (delete files it didn’t upload)")
       .setDesc(
         "Off by default — the plugin can only delete files it uploaded itself. Turn this on to also " +
           "delete files it didn’t upload; this gives the plugin read/write/delete over your entire " +
-          "Drive. Changing this asks you to sign in to Google again." +
-          fullDriveStatus,
+          "Drive. Changing this asks you to sign in to Google again.",
       )
       .addToggle((toggle) => {
         toggle
@@ -263,6 +262,9 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
             }
           });
       });
+    if (fullDriveStatus) {
+      fullDriveAccessSetting.descEl.createDiv({ cls: "gdab-setting-status", text: fullDriveStatus });
+    }
 
     // Legacy connections made before Connect requested the read scope need a one-time grant.
     if (this.plugin.auth.isConnected && !this.plugin.auth.hasDriveReadonlyScope) {
