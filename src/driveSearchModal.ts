@@ -400,15 +400,8 @@ export class DriveSearchModal extends FuzzySuggestModal<DriveIndexItem> {
   }
 
   onChooseItem(item: DriveIndexItem): void {
-    const sourceFile = this.app.workspace.getActiveFile();
-    // Previewable files (image/video/pdf) embed inline by default; everything else follows the
-    // configured link format (asset-note wikilink / inline link).
-    const embed = isEmbeddablePreviewMime(item.mimeType ?? "");
-    const inserted = embed
-      ? this.insert.insertDriveItemAsEmbedAtCursor(this.editor, item, sourceFile)
-      : this.insert.insertDriveItemAtCursor(this.editor, item, sourceFile);
-    inserted.catch((error) => {
-      new Notice(`Insert Drive ${embed ? "embed" : "link"} failed: ${error instanceof Error ? error.message : String(error)}`);
+    this.insert.insertDriveItemAtCursor(this.editor, item, this.app.workspace.getActiveFile()).catch((error) => {
+      new Notice(`Insert Drive item failed: ${error instanceof Error ? error.message : String(error)}`);
     });
   }
 
@@ -697,15 +690,6 @@ export function getDriveResultTypeClass(value: Pick<DriveIndexItem, "mimeType">)
   }
 
   return "gdab-type-file";
-}
-
-// Files that render a real inline preview (so search→insert embeds them by default). HEIC is an
-// image MIME but Obsidian can't decode it inline, so it's excluded (it'd only show a thumbnail card).
-export function isEmbeddablePreviewMime(mimeType: string): boolean {
-  if (mimeType.startsWith("image/")) {
-    return !/^image\/hei[cf]/i.test(mimeType);
-  }
-  return mimeType.startsWith("video/") || mimeType === "application/pdf";
 }
 
 export function getDriveResultIcon(value: Pick<DriveIndexItem, "mimeType" | "name">): string {

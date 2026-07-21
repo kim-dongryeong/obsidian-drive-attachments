@@ -12,10 +12,8 @@ import { DrivePickerService } from "./drivePickerService";
 import { DrivePreviewService } from "./drivePreviewService";
 import { DriveSearchModal } from "./driveSearchModal";
 import { DriveSearchService } from "./driveSearchService";
-import { DriveServerSearchModal } from "./driveServerSearchModal";
 import { DriveTrashService } from "./driveTrashService";
 import { DriveUploadResult, DriveUploadService, FileUploadSource } from "./driveUploadService";
-import { upsertActionsSection } from "./actionsSection";
 import { DriveNoteActionsService } from "./driveNoteActionsService";
 import { DropController, makeUploadPlaceholder, replacePlaceholder } from "./dropController";
 import { PanelDragModifierTracker } from "./panelDragModifierTracker";
@@ -288,19 +286,19 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
 
     this.addCommand({
       id: "insert-drive-link-at-cursor",
-      name: "Insert Drive link at cursor",
+      name: "Open Drive picker and insert preview",
       editorCallback: async (editor) => {
         try {
-          await this.insert.insertDriveLinkAtCursor(editor, this.app.workspace.getActiveFile());
+          await this.insert.pickAndInsertPreviewAtCursor(editor, this.app.workspace.getActiveFile());
         } catch (error) {
-          new Notice(`Insert Drive link failed: ${error instanceof Error ? error.message : String(error)}`);
+          new Notice(`Insert Drive preview failed: ${error instanceof Error ? error.message : String(error)}`);
         }
       },
     });
 
     this.addCommand({
       id: "search-drive-and-insert-link",
-      name: "Search Google Drive and insert link",
+      name: "Search Google Drive and insert preview",
       editorCallback: (editor) => {
         new DriveSearchModal(
           this.app,
@@ -314,32 +312,6 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
           () => this.settings,
           (mimeType, name) => this.customIconPack.customIconImgSrc(mimeType, name),
         ).open();
-      },
-    });
-
-    // The unified search command above already runs the server query live, so this standalone
-    // server-exact command is hidden unless the advanced toggle re-enables it (for A/B comparison).
-    // `editorCheckCallback` re-evaluates per palette open — toggling needs no plugin reload.
-    this.addCommand({
-      id: "search-drive-server-and-insert-link",
-      name: "Search Google Drive (server, exact)",
-      editorCheckCallback: (checking, editor) => {
-        if (!this.settings.showServerOnlySearchCommand) {
-          return false;
-        }
-        if (!checking) {
-          new DriveServerSearchModal(
-            this.app,
-            editor,
-            this.auth,
-            this.search,
-            this.metadata,
-            this.insert,
-            this.preview,
-            () => this.settings,
-          ).open();
-        }
-        return true;
       },
     });
 
@@ -375,7 +347,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
 
     this.addCommand({
       id: "upload-local-file-to-drive",
-      name: "Upload local file to Drive and insert link",
+      name: "Upload local file to Drive and insert preview",
       editorCallback: async (editor) => {
         try {
           const sourceFile = this.app.workspace.getActiveFile();
@@ -442,23 +414,6 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "attach-drive-folder-frontmatter",
-      name: "Attach Drive folder to current note frontmatter",
-      checkCallback: (checking) => {
-        const file = this.app.workspace.getActiveFile();
-        const canRun = file instanceof TFile && file.extension === "md";
-        if (!canRun || checking) {
-          return canRun;
-        }
-
-        this.insert.attachPickedFolderToFrontmatter(file).catch((error) => {
-          new Notice(`Attach Drive folder failed: ${error instanceof Error ? error.message : String(error)}`);
-        });
-        return true;
-      },
-    });
-
-    this.addCommand({
       id: "refresh-drive-metadata",
       name: "Refresh Drive metadata",
       checkCallback: (checking) => {
@@ -475,20 +430,6 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
           new Notice(`Refresh Drive metadata failed: ${error instanceof Error ? error.message : String(error)}`);
         });
         return true;
-      },
-    });
-
-    this.addCommand({
-      id: "open-attached-drive-folder",
-      name: "Open attached Drive folder",
-      checkCallback: (checking) => {
-        const file = this.app.workspace.getActiveFile();
-        const canRun = file instanceof TFile && file.extension === "md" && this.insert.hasAttachedFolder(file);
-        if (!canRun || checking) {
-          return canRun;
-        }
-
-        return this.insert.openAttachedFolder(file);
       },
     });
 
@@ -531,47 +472,11 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
       },
     });
 
-    this.addCommand({
-      id: "insert-drive-actions-block",
-      name: "Insert Drive actions block in this note",
-      checkCallback: (checking) => {
-        const file = this.app.workspace.getActiveFile();
-        const driveId = this.readActiveNoteDriveId(file);
-        if (!driveId) {
-          return false;
-        }
-        if (checking) {
-          return true;
-        }
-
-        if (!(file instanceof TFile)) {
-          return false;
-        }
-        void this.app.vault
-          .process(file, (content) => upsertActionsSection(content, driveId))
-          .catch((error) => {
-            new Notice(`Insert Drive actions block failed: ${error instanceof Error ? error.message : String(error)}`);
-          });
-        return true;
-      },
-    });
-
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
         if (!(file instanceof TFile) || file.extension !== "md") {
           return;
         }
-
-        menu.addItem((item) => {
-          item
-            .setTitle("Attach Drive folder to frontmatter")
-            .setIcon("link")
-            .onClick(() => {
-              this.insert.attachPickedFolderToFrontmatter(file).catch((error) => {
-                new Notice(`Attach Drive folder failed: ${error instanceof Error ? error.message : String(error)}`);
-              });
-            });
-        });
 
         const menuDriveId = this.readActiveNoteDriveId(file);
         if (menuDriveId) {
@@ -589,17 +494,6 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
               .setIcon("trash")
               .onClick(() => {
                 void this.noteActions.deleteDriveFile(file, menuDriveId);
-              });
-          });
-        }
-
-        if (this.insert.hasAttachedFolder(file)) {
-          menu.addItem((item) => {
-            item
-              .setTitle("Open attached Drive folder")
-              .setIcon("external-link")
-              .onClick(() => {
-                this.insert.openAttachedFolder(file);
               });
           });
         }
@@ -626,10 +520,6 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
   // content's md5 so a later drop of the same bytes hits the free vault layer without rescanning.
   // Inline-link mode creates no asset note, so there is nothing to remember.
   private seedDedupFromInsertedAssetNote(md5: string, driveId: string): void {
-    if (this.settings.linkFormat !== "asset-note") {
-      return;
-    }
-
     const path = this.insert.getAssetNotePathForDriveId(driveId);
     if (path) {
       this.dedup.rememberVaultAssetNote(md5, path);

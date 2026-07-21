@@ -1,4 +1,8 @@
-export type LinkFormat = "inline" | "asset-note";
+export type LinkFormat = "embed" | "inline" | "asset-note";
+
+export function isLinkFormat(value: string): value is LinkFormat {
+  return value === "embed" || value === "inline" || value === "asset-note";
+}
 
 // What happens when an image (e.g. a screenshot) is pasted into the editor. "vault" = leave
 // Obsidian's default untouched (saved into the attachments folder); "ask" = the same Save/Upload
@@ -267,7 +271,7 @@ export const DEFAULT_SETTINGS: GoogleDriveAttachmentBridgeSettings = {
   tokenExpiry: null,
   grantedScopes: [],
   accountEmail: null,
-  linkFormat: "asset-note",
+  linkFormat: "embed",
   assetNoteLocation: "specified-folder",
   assetNoteSubfolderName: "",
   assetNoteFolderPath: "",

@@ -9,6 +9,7 @@ import {
   isAssetNoteLocation,
   isEmbedActionToolbarStyle,
   isIconTheme,
+  isLinkFormat,
   isPanelDragOutMode,
   isPanelDropUploadMode,
   isPastedImageDestination,
@@ -385,15 +386,15 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
       .setName("Drag-out format")
       .setDesc(
         "What dragging a Drive panel row (or selection) out onto a note inserts at the drop point. " +
-          "“Inline link” inserts a Markdown link; “Embed preview” inserts a preview embed block for " +
-          "files (folders fall back to a link); “Drive-link note” creates the asset note and inserts a " +
-          "wikilink to it. Hold a modifier AT THE DROP to override per-drag — ⌘/Ctrl → Drive-link note · " +
+          "“Embed preview” (the default) inserts a preview embed block — folders render as a folder " +
+          "card; “Inline link” inserts a Markdown link; “Drive-link note” creates the asset note and " +
+          "inserts a wikilink to it. Hold a modifier AT THE DROP to override per-drag — ⌘/Ctrl → Drive-link note · " +
           "⌥/Alt → embed preview · ⇧ Shift → inline link. (In-panel drag onto a folder still moves/copies.)",
       )
       .addDropdown((dropdown) => {
         dropdown
-          .addOption("link", "Inline link")
           .addOption("embed", "Embed preview (default)")
+          .addOption("link", "Inline link")
           .addOption("note", "Drive-link note")
           .addOption("off", "Off")
           .setValue(this.plugin.settings.panelDragOut)
@@ -495,133 +496,112 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName("Link insertion").setHeading();
 
     new Setting(containerEl)
-      .setName("Inserted link format")
+      .setName("Inserted format")
       .setDesc(
-        "What the “Insert Drive link” commands (Picker and search) drop into your note when you pick a " +
-          "file or folder. “Inline Markdown link” inserts just a [text](url) link at the cursor. " +
-          "“Drive-link note wikilink” instead creates a dedicated note for the file — holding its " +
-          "metadata, and optionally a preview and action buttons — and inserts a [[wikilink]] to it. " +
-          "All the Drive-link note settings below apply only to the wikilink option.",
+        "What the insert flows (Picker/search/upload commands and file drops onto a note) put into the " +
+          "note. “Embed preview” (the default) inserts an inline preview block and creates no extra note. " +
+          "“Inline Markdown link” inserts just a [text](url) link. “Drive-link note wikilink” creates a " +
+          "dedicated note for the file — holding its metadata, preview, and action buttons — and inserts " +
+          "a [[wikilink]] to it. The Drive-link note settings below apply whenever such a note is created, " +
+          "regardless of this choice.",
       )
       .addDropdown((dropdown) => {
         dropdown
+          .addOption("embed", "Embed preview (default)")
           .addOption("inline", "Inline Markdown link")
           .addOption("asset-note", "Drive-link note wikilink")
           .setValue(this.plugin.settings.linkFormat)
           .onChange(async (value) => {
-            this.plugin.settings.linkFormat = value === "asset-note" ? "asset-note" : "inline";
+            this.plugin.settings.linkFormat = isLinkFormat(value) ? value : "embed";
             await this.plugin.saveSettings();
-            // The note-location rows below grey out when inline links are selected.
+          });
+      });
+
+    new Setting(containerEl).setName("Drive-link notes").setHeading();
+
+    new Setting(containerEl)
+      .setName("Default location for new Drive-link note")
+      .setDesc("Where newly created Drive-link notes are placed.")
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("vault-root", "Vault folder")
+          .addOption("current-folder", "Same folder as current file")
+          .addOption("subfolder", "In subfolder under current folder")
+          .addOption("specified-folder", "In the folder specified below")
+          .setValue(this.plugin.settings.assetNoteLocation)
+          .onChange(async (value) => {
+            this.plugin.settings.assetNoteLocation = isAssetNoteLocation(value) ? value : "vault-root";
+            await this.plugin.saveSettings();
+            // Reveal/hide the matching sub-setting below.
             this.redisplayPreservingScroll();
           });
       });
 
-    // The note-location rows only apply to asset-note wikilinks. With inline links selected they
-    // render greyed-out instead of hidden (kdr prefers disabled over hidden) so they stay
-    // discoverable. Components must be added before setDisabled — it only reaches existing ones.
-    // Defined here (before both the basic note rows and the advanced note-block rows) so both reuse it.
-    const assetNotesActive = this.plugin.settings.linkFormat === "asset-note";
-    const assetNoteOnlyHint = assetNotesActive ? "" : " Only applies to Drive-link note wikilinks.";
-    const greyOutWhenInline = (setting: Setting): void => {
-      if (!assetNotesActive) {
-        setting.setDisabled(true);
-        setting.settingEl.addClass("gdab-setting-disabled");
-      }
-    };
-
-    greyOutWhenInline(
-      new Setting(containerEl)
-        .setName("Default location for new Drive-link note")
-        .setDesc(`Where newly created Drive-link notes are placed.${assetNoteOnlyHint}`)
-        .addDropdown((dropdown) => {
-          dropdown
-            .addOption("vault-root", "Vault folder")
-            .addOption("current-folder", "Same folder as current file")
-            .addOption("subfolder", "In subfolder under current folder")
-            .addOption("specified-folder", "In the folder specified below")
-            .setValue(this.plugin.settings.assetNoteLocation)
-            .onChange(async (value) => {
-              this.plugin.settings.assetNoteLocation = isAssetNoteLocation(value) ? value : "vault-root";
-              await this.plugin.saveSettings();
-              // Reveal/hide the matching sub-setting below.
-              this.redisplayPreservingScroll();
-            });
-        }),
-    );
-
     if (this.plugin.settings.assetNoteLocation === "subfolder") {
-      greyOutWhenInline(
-        new Setting(containerEl)
-          .setName("Subfolder name")
-          .setDesc(
-            "New Drive-link notes go in this subfolder under the current file's folder, created if missing. " +
-              `Empty means "${DEFAULT_ASSET_NOTE_SUBFOLDER_NAME}".${assetNoteOnlyHint}`,
-          )
-          .addText((text) => {
-            text
-              .setPlaceholder(DEFAULT_ASSET_NOTE_SUBFOLDER_NAME)
-              .setValue(this.plugin.settings.assetNoteSubfolderName)
-              .onChange(async (value) => {
-                this.plugin.settings.assetNoteSubfolderName = value.trim();
-                await this.plugin.saveSettings();
-              });
-          }),
-      );
-    }
-
-    if (this.plugin.settings.assetNoteLocation === "specified-folder") {
-      greyOutWhenInline(
-        new Setting(containerEl)
-          .setName("Drive-link note folder path")
-          .setDesc(
-            "Vault folder path where new Drive-link notes are placed, created if missing. " +
-              `Empty means "${DEFAULT_ASSET_NOTE_FOLDER_PATH}".${assetNoteOnlyHint}`,
-          )
-          .addText((text) => {
-            text
-              .setPlaceholder(DEFAULT_ASSET_NOTE_FOLDER_PATH)
-              .setValue(this.plugin.settings.assetNoteFolderPath)
-              .onChange(async (value) => {
-                this.plugin.settings.assetNoteFolderPath = value.trim();
-                await this.plugin.saveSettings();
-              });
-          }),
-      );
-    }
-
-    greyOutWhenInline(
       new Setting(containerEl)
-        .setName("Drive-link note name")
+        .setName("Subfolder name")
         .setDesc(
-          "Filename template for Drive-link notes — {{name}} becomes the Drive file's name. Applied " +
-            `when a note is created and when a Drive rename updates it. A template without {{name}} falls back to "${DEFAULT_ASSET_NOTE_NAME_TEMPLATE}".${assetNoteOnlyHint}`,
+          "New Drive-link notes go in this subfolder under the current file's folder, created if missing. " +
+            `Empty means "${DEFAULT_ASSET_NOTE_SUBFOLDER_NAME}".`,
         )
         .addText((text) => {
           text
-            .setPlaceholder(DEFAULT_ASSET_NOTE_NAME_TEMPLATE)
-            .setValue(this.plugin.settings.assetNoteNameTemplate)
+            .setPlaceholder(DEFAULT_ASSET_NOTE_SUBFOLDER_NAME)
+            .setValue(this.plugin.settings.assetNoteSubfolderName)
             .onChange(async (value) => {
-              this.plugin.settings.assetNoteNameTemplate = value.trim();
+              this.plugin.settings.assetNoteSubfolderName = value.trim();
               await this.plugin.saveSettings();
             });
-        }),
-    );
+        });
+    }
 
-    greyOutWhenInline(
+    if (this.plugin.settings.assetNoteLocation === "specified-folder") {
       new Setting(containerEl)
-        .setName("Extra frontmatter for new Drive-link notes")
-        .setDesc(createExtraFrontmatterDescription(assetNoteOnlyHint))
-        .addTextArea((text) => {
+        .setName("Drive-link note folder path")
+        .setDesc(
+          "Vault folder path where new Drive-link notes are placed, created if missing. " +
+            `Empty means "${DEFAULT_ASSET_NOTE_FOLDER_PATH}".`,
+        )
+        .addText((text) => {
           text
-            .setValue(this.plugin.settings.assetNoteExtraFrontmatter)
+            .setPlaceholder(DEFAULT_ASSET_NOTE_FOLDER_PATH)
+            .setValue(this.plugin.settings.assetNoteFolderPath)
             .onChange(async (value) => {
-              this.plugin.settings.assetNoteExtraFrontmatter = value;
+              this.plugin.settings.assetNoteFolderPath = value.trim();
               await this.plugin.saveSettings();
             });
-          text.inputEl.rows = 4;
-          text.inputEl.addClass("gdab-extra-frontmatter-textarea");
-        }),
-    );
+        });
+    }
+
+    new Setting(containerEl)
+      .setName("Drive-link note name")
+      .setDesc(
+        "Filename template for Drive-link notes — {{name}} becomes the Drive file's name. Applied " +
+          `when a note is created and when a Drive rename updates it. A template without {{name}} falls back to "${DEFAULT_ASSET_NOTE_NAME_TEMPLATE}".`,
+      )
+      .addText((text) => {
+        text
+          .setPlaceholder(DEFAULT_ASSET_NOTE_NAME_TEMPLATE)
+          .setValue(this.plugin.settings.assetNoteNameTemplate)
+          .onChange(async (value) => {
+            this.plugin.settings.assetNoteNameTemplate = value.trim();
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName("Extra frontmatter for new Drive-link notes")
+      .setDesc(createExtraFrontmatterDescription(""))
+      .addTextArea((text) => {
+        text
+          .setValue(this.plugin.settings.assetNoteExtraFrontmatter)
+          .onChange(async (value) => {
+            this.plugin.settings.assetNoteExtraFrontmatter = value;
+            await this.plugin.saveSettings();
+          });
+        text.inputEl.rows = 4;
+        text.inputEl.addClass("gdab-extra-frontmatter-textarea");
+      });
 
     // ===================================================================================
     // ADVANCED — behind the expander
@@ -786,58 +766,52 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
 
     new Setting(containerEl).setName("Drive-link note blocks").setHeading();
 
-    greyOutWhenInline(
-      new Setting(containerEl)
-        .setName("Record how each Drive-link note was created")
-        .setDesc(
-          "Stamp a write-once “drive_origin” property on each new Drive-link note: “uploaded” when the " +
-            "file was uploaded from Obsidian (drop · paste · upload command · migrate), “linked” when " +
-            `it was brought in from an existing Drive file (picker · search). A metadata refresh never changes it.${assetNoteOnlyHint}`,
-        )
-        .addToggle((toggle) => {
-          toggle
-            .setValue(this.plugin.settings.recordDriveOrigin)
-            .onChange(async (value) => {
-              this.plugin.settings.recordDriveOrigin = value;
-              await this.plugin.saveSettings();
-            });
-        }),
-    );
+    new Setting(containerEl)
+      .setName("Record how each Drive-link note was created")
+      .setDesc(
+        "Stamp a write-once “drive_origin” property on each new Drive-link note: “uploaded” when the " +
+          "file was uploaded from Obsidian (drop · paste · upload command · migrate), “linked” when " +
+          "it was brought in from an existing Drive file (picker · search). A metadata refresh never changes it.",
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.recordDriveOrigin)
+          .onChange(async (value) => {
+            this.plugin.settings.recordDriveOrigin = value;
+            await this.plugin.saveSettings();
+          });
+      });
 
-    greyOutWhenInline(
-      new Setting(containerEl)
-        .setName("Add a preview block to new Drive-link notes")
-        .setDesc(
-          "When a new Drive-link note is created (or re-linked) for an image, add a “## Preview” " +
-            "section with a preview block that embeds the image inline. Images only — other " +
-            `file types are unaffected, and existing notes change only when re-linked.${assetNoteOnlyHint}`,
-        )
-        .addToggle((toggle) => {
-          toggle
-            .setValue(this.plugin.settings.addPreviewBlockToNewNotes)
-            .onChange(async (value) => {
-              this.plugin.settings.addPreviewBlockToNewNotes = value;
-              await this.plugin.saveSettings();
-            });
-        }),
-    );
+    new Setting(containerEl)
+      .setName("Add a preview block to new Drive-link notes")
+      .setDesc(
+        "When a new Drive-link note is created (or re-linked) for an image, add a “## Preview” " +
+          "section with a preview block that embeds the image inline. Images only — other " +
+          "file types are unaffected, and existing notes change only when re-linked.",
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.addPreviewBlockToNewNotes)
+          .onChange(async (value) => {
+            this.plugin.settings.addPreviewBlockToNewNotes = value;
+            await this.plugin.saveSettings();
+          });
+      });
 
-    greyOutWhenInline(
-      new Setting(containerEl)
-        .setName("Add an actions block to new Drive-link notes")
-        .setDesc(
-          "Add an “## Actions” block with buttons (Open in Drive · Open folder · Delete file) to new " +
-            `Drive-link notes, and onto existing ones when re-linked. All file types.${assetNoteOnlyHint}`,
-        )
-        .addToggle((toggle) => {
-          toggle
-            .setValue(this.plugin.settings.addActionsBlockToNewNotes)
-            .onChange(async (value) => {
-              this.plugin.settings.addActionsBlockToNewNotes = value;
-              await this.plugin.saveSettings();
-            });
-        }),
-    );
+    new Setting(containerEl)
+      .setName("Add an actions block to new Drive-link notes")
+      .setDesc(
+        "Add an “## Actions” block with buttons (Open in Drive · Open folder · Delete file) to new " +
+          "Drive-link notes, and onto existing ones when re-linked. All file types.",
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.addActionsBlockToNewNotes)
+          .onChange(async (value) => {
+            this.plugin.settings.addActionsBlockToNewNotes = value;
+            await this.plugin.saveSettings();
+          });
+      });
 
     new Setting(containerEl)
       .setName("Show embed backlinks in the actions block")

@@ -201,8 +201,7 @@ export class DropController {
     const sourcePath = info.file?.path ?? "";
 
     if (destination === "drive") {
-      // Pasted images embed inline (drive-preview) rather than insert a wikilink — kdr's default.
-      void this.uploadFilesToDrive(files, editor, pastePosition, sourcePath, sourceFile, true);
+      void this.uploadFilesToDrive(files, editor, pastePosition, sourcePath, sourceFile);
       return true;
     }
 
@@ -213,7 +212,7 @@ export class DropController {
         await this.saveFilesLocally(files, editor, pastePosition, sourcePath);
       },
       () => {
-        void this.uploadFilesToDrive(files, editor, pastePosition, sourcePath, sourceFile, true);
+        void this.uploadFilesToDrive(files, editor, pastePosition, sourcePath, sourceFile);
       },
       "pasted",
     ).open();
@@ -239,7 +238,10 @@ export class DropController {
   private async saveFileLocally(file: File, sourcePath: string): Promise<string> {
     const path = await this.app.fileManager.getAvailablePathForAttachment(file.name, sourcePath);
     const createdFile = await this.app.vault.createBinary(path, await file.arrayBuffer());
-    return this.app.fileManager.generateMarkdownLink(createdFile, sourcePath);
+    const link = this.app.fileManager.generateMarkdownLink(createdFile, sourcePath);
+    // generateMarkdownLink only embeds (`!`-prefixes) recognized media extensions; force it for
+    // everything else too, so a locally saved drop still previews like the Drive-embed default.
+    return link.startsWith("!") ? link : `!${link}`;
   }
 
   // Upload-to-Drive branch (D3: default already prevented, so we own the insert). Insert one unique
@@ -252,7 +254,6 @@ export class DropController {
     dropPosition: EditorPosition,
     sourcePath: string,
     sourceFile: MarkdownFileInfo["file"],
-    embedImages = false,
   ): Promise<void> {
     const placeholders = files.map((file) => makeUploadPlaceholder(file.name));
     const placeholderText = placeholders.join("\n");
@@ -282,7 +283,7 @@ export class DropController {
             continue;
           }
           if (action === "use-existing") {
-            const markdown = await this.formatUploadedItem(duplicate.item, sourceFile, embedImages);
+            const markdown = await this.formatUploadedItem(duplicate.item, sourceFile);
             this.seedDedupFromInsertedAssetNote(md5, duplicate.item.id);
             if (!replacePlaceholder(editor, placeholder, markdown)) {
               new Notice(`Linked existing Drive file ${duplicate.item.name}, but its placeholder was gone — link: ${markdown}`);
@@ -300,7 +301,7 @@ export class DropController {
           source,
           parentFolderId,
         });
-        const markdown = await this.formatUploadedItem(result.item, sourceFile, embedImages);
+        const markdown = await this.formatUploadedItem(result.item, sourceFile);
         this.seedDedupFromInsertedAssetNote(md5, result.item.id);
 
         if (!replacePlaceholder(editor, placeholder, markdown)) {
@@ -347,23 +348,13 @@ export class DropController {
     }
   }
 
-  // Paste-to-Drive embeds the image inline (drive-preview) instead of inserting a wikilink; drop keeps
-  // the configured link format. Both still create/reuse the asset note for metadata + dedup.
-  private async formatUploadedItem(
-    item: DrivePickerItem,
-    sourceFile: MarkdownFileInfo["file"],
-    embed: boolean,
-  ): Promise<string> {
-    return embed
-      ? await this.insert.createAssetNoteAndEmbed(item, sourceFile, "uploaded")
-      : await this.insert.formatDriveItemMarkdown(item, sourceFile, "uploaded");
+  // Uploads (drop or paste) insert in the configured link format — a `drive-preview` embed by
+  // default, which creates NO Drive-link note (the user can create one from the embed's note icon).
+  private formatUploadedItem(item: DrivePickerItem, sourceFile: MarkdownFileInfo["file"]): Promise<string> {
+    return this.insert.formatDriveItemMarkdown(item, sourceFile, "uploaded");
   }
 
   private seedDedupFromInsertedAssetNote(md5: string, driveId: string): void {
-    if (this.getSettings().linkFormat !== "asset-note") {
-      return;
-    }
-
     const path = this.insert.getAssetNotePathForDriveId(driveId);
     if (path) {
       this.dedup.rememberVaultAssetNote(md5, path);

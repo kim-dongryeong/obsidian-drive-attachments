@@ -344,8 +344,8 @@
 }
 
 /*
- * Settings tab (see src/settingsTab.ts → "Link insertion" section):
- *   .gdab-setting-disabled   note-location rows when inline links are selected — Setting.setDisabled
+ * Settings tab (see src/settingsTab.ts → "Google Drive connection" section):
+ *   .gdab-setting-disabled   rows greyed out while a connect/reconnect is in flight — Setting.setDisabled
  *                            only disables the input components, so this greys the whole row (name +
  *                            description) to read as inactive-but-discoverable (kdr prefers disabled
  *                            over hidden).

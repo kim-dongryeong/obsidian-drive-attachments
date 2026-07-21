@@ -117,7 +117,7 @@ export async function copyDriveItemLink(item: DriveActionItem): Promise<void> {
 
 // Insert a plain inline Markdown link to the Drive item at the resolved editor's cursor. Forces the
 // inline form (insertDriveItemAtCursor would follow the global linkFormat setting, which defaults to
-// asset-note) so the menu's "Insert link" always means a link.
+// embed) so the menu's "Insert link" always means a link.
 export function insertDriveItemLink(item: DriveActionItem, context: DriveRowActionContext): void {
   const target = context.resolveEditor();
   if (!target) {

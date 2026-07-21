@@ -9,6 +9,7 @@ import {
   TFile,
 } from "obsidian";
 import { formatBytes } from "./byteFormat";
+import { PREVIEW_LANG } from "./codeBlockLang";
 import { computeMd5Hex, DriveDedupHit, DriveDedupService } from "./driveDedupService";
 import { DrivePickerItem } from "./driveTypes";
 import { BufferUploadSource, DriveUploadService } from "./driveUploadService";
@@ -46,6 +47,10 @@ export interface ReferenceRewrite {
   reference: AttachmentReference;
   // Exact text to splice into the source note over [reference.startOffset, reference.endOffset).
   replacement: string;
+  // A fenced code block (the drive-preview embed) must sit on its own line to parse. Set for the
+  // embed case so applyReferenceRewrites pads it with newlines when the original reference wasn't
+  // already alone on its line.
+  blockLevel?: boolean;
 }
 
 export interface MigrationUploadResult {
@@ -104,8 +109,8 @@ export class MigrateNoteAttachmentsPreviewModal extends Modal {
 
     contentEl.createEl("p", {
       text: this.settings.deleteLocalAfterMigrate
-        ? "On Confirm: upload (or reuse by md5) each attachment, create its Drive-link note, rewrite this note's references, then move the local file to trash (recoverable). A file still referenced by other notes is kept."
-        : "On Confirm: upload (or reuse by md5) each attachment, create its Drive-link note, and rewrite this note's references. Local files are kept — enable “Delete local file after migrating” in settings to slim the vault.",
+        ? "On Confirm: upload (or reuse by md5) each attachment, create its Drive-link note, rewrite this note's references (embeds become inline Drive previews), then move the local file to trash (recoverable). A file still referenced by other notes is kept."
+        : "On Confirm: upload (or reuse by md5) each attachment, create its Drive-link note, and rewrite this note's references (embeds become inline Drive previews). Local files are kept — enable “Delete local file after migrating” in settings to slim the vault.",
       cls: "setting-item-description",
     });
 
@@ -410,7 +415,7 @@ export class MigrateNoteAttachmentsPreviewModal extends Modal {
       usedRootFallback,
       driveLinkNoteWikilink: driveLinkNote.wikilink,
       driveLinkNotePath: driveLinkNote.path,
-      referenceRewrites: planReferenceRewrites(plan.candidate, driveLinkNote.wikilink),
+      referenceRewrites: planReferenceRewrites(plan.candidate, driveLinkNote.wikilink, item.id),
     };
   }
 }
@@ -477,24 +482,26 @@ function summarizeOutcome(outcome: MigrationOutcome, rewriteOk: boolean): string
 }
 
 // Pure planning step — NO file is touched here (deletion and the actual splice are later increments).
-// Given the wikilink to the freshly created/reused Drive-link note ("[[basename]]"), compute the
-// replacement text for each local reference in the source note:
-//   • an embed (`![[img.png]]` or `![alt](img.png)`) → an EMBED of the Drive-link note (`![[basename]]`).
-//     The note carries its own `drive-preview` block, so transcluding it renders the image. A bare
-//     `drive-preview` block inlined into the source note would NOT resolve — it reads `drive_id` from
-//     its host note's frontmatter (see previewSection.ts), which the source note doesn't have.
-//   • any other reference (a `[[wikilink]]` or a `[text](path)` link) → a LINK to the note (`[[basename]]`).
+// Given the wikilink to the freshly created/reused Drive-link note ("[[basename]]") and the file's
+// Drive id, compute the replacement text for each local reference in the source note:
+//   • an embed (`![[img.png]]` or `![alt](img.png)`) → an inline `drive-preview` EMBED block for the
+//     Drive file directly (matching the plugin-wide embed default), marked blockLevel so it lands on
+//     its own line.
+//   • any other reference (a `[[wikilink]]` or a `[text](path)` link) → a LINK to the Drive-link note
+//     (`[[basename]]`).
 // Reference offsets are carried through unchanged so the execution increment can splice replacements in
 // DESCENDING offset order (an earlier splice must not shift the offsets of later, earlier-in-file refs).
 export function planReferenceRewrites(
   candidate: LocalAttachmentCandidate,
   driveLinkNoteWikilink: string,
+  driveId: string,
 ): ReferenceRewrite[] {
-  const embedReplacement = `!${driveLinkNoteWikilink}`;
-  return candidate.references.map((reference) => ({
-    reference,
-    replacement: reference.kind === "embed" ? embedReplacement : driveLinkNoteWikilink,
-  }));
+  const embedReplacement = ["```" + PREVIEW_LANG, driveId, "width: 480", "```"].join("\n");
+  return candidate.references.map((reference) =>
+    reference.kind === "embed"
+      ? { reference, replacement: embedReplacement, blockLevel: true }
+      : { reference, replacement: driveLinkNoteWikilink },
+  );
 }
 
 // Pure note-text transform — applies one candidate's planned ReferenceRewrites to `noteText`,
@@ -548,8 +555,17 @@ export function applyReferenceRewrites(noteText: string, rewrites: ReferenceRewr
 
   // Apply in the same descending order — every splice leaves all earlier offsets still valid.
   let result = noteText;
-  for (const { reference, replacement } of ordered) {
-    result = result.slice(0, reference.startOffset) + replacement + result.slice(reference.endOffset);
+  for (const { reference, replacement, blockLevel } of ordered) {
+    // A fenced code block (blockLevel) must start and end on its own line to parse. An inline
+    // reference like `text ![[img.png]] more text` isn't already alone on its line, so pad with
+    // newlines on whichever side isn't already at a line boundary.
+    let spliced = replacement;
+    if (blockLevel) {
+      const atLineStart = reference.startOffset === 0 || result.charAt(reference.startOffset - 1) === "\n";
+      const atLineEnd = reference.endOffset === result.length || result.charAt(reference.endOffset) === "\n";
+      spliced = `${atLineStart ? "" : "\n"}${replacement}${atLineEnd ? "" : "\n"}`;
+    }
+    result = result.slice(0, reference.startOffset) + spliced + result.slice(reference.endOffset);
   }
   return result;
 }

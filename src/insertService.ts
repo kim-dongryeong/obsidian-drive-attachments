@@ -37,7 +37,9 @@ export class InsertService {
     private readonly getSettings: () => GoogleDriveAttachmentBridgeSettings,
   ) {}
 
-  async insertDriveLinkAtCursor(editor: Editor, sourceFile?: TFile | null): Promise<void> {
+  // Picker command entry point. Inserts in the configured link format — an inline `drive-preview`
+  // embed by default (no Drive-link note; the user can create one later from the embed's note icon).
+  async pickAndInsertPreviewAtCursor(editor: Editor, sourceFile?: TFile | null): Promise<void> {
     const item = await this.pickValidatedDriveItem();
     if (!item) {
       return;
@@ -55,6 +57,10 @@ export class InsertService {
     sourceFile?: TFile | null,
     origin: DriveNoteOrigin = "linked",
   ): Promise<void> {
+    if (this.getSettings().linkFormat === "embed") {
+      await this.insertDriveItemAsEmbedAtCursor(editor, item);
+      return;
+    }
     editor.replaceSelection(await this.formatDriveItemMarkdown(item, sourceFile, origin));
   }
 
@@ -89,15 +95,13 @@ export class InsertService {
     return ["```" + PREVIEW_LANG, driveId, "width: 480", "```"].join("\n");
   }
 
-  // Insert an inline `drive-preview` EMBED (and ensure the asset note exists for metadata/dedup). Used
-  // by search→insert for previewable files (image/video/pdf), so they show inline by default.
-  async insertDriveItemAsEmbedAtCursor(
-    editor: Editor,
-    item: DrivePickerItem,
-    sourceFile?: TFile | null,
-    origin: DriveNoteOrigin = "linked",
-  ): Promise<void> {
-    editor.replaceSelection(await this.createAssetNoteAndEmbed(item, sourceFile, origin));
+  // Insert an inline `drive-preview` EMBED at the cursor WITHOUT creating a Drive-link note — the
+  // default insert form everywhere (picker, search, panel). A fenced block must start at column 0 to
+  // parse, so break the line first when the cursor isn't there.
+  async insertDriveItemAsEmbedAtCursor(editor: Editor, item: DrivePickerItem): Promise<void> {
+    assertValidDrivePickerItem(item);
+    const prefix = editor.getCursor().ch > 0 ? "\n" : "";
+    editor.replaceSelection(`${prefix}${this.formatDriveEmbedBlock(item.id)}\n`);
   }
 
   async ensureDriveLinkNoteForItem(
@@ -120,9 +124,10 @@ export class InsertService {
     return this.assetNotePathsByDriveId.get(driveId) ?? null;
   }
 
-  // Build the Markdown for a Drive item (inline link or asset-note wikilink, per settings) WITHOUT
-  // inserting it. The drop→upload flow needs the string to swap into a placeholder it already
-  // inserted at the drop cursor; `insertDriveItemAtCursor` is the replaceSelection wrapper around it.
+  // Build the Markdown for a Drive item per the configured link format (drive-preview embed / inline
+  // link / asset-note wikilink) WITHOUT inserting it. The drop→upload flow needs the string to swap
+  // into a placeholder it already inserted at the drop cursor; `insertDriveItemAtCursor` is the
+  // replaceSelection wrapper around it.
   async formatDriveItemMarkdown(
     item: DrivePickerItem,
     sourceFile?: TFile | null,
@@ -130,62 +135,15 @@ export class InsertService {
   ): Promise<string> {
     assertValidDrivePickerItem(item);
 
-    return this.getSettings().linkFormat === "asset-note"
-      ? await this.createAssetNoteAndWikilink(item, sourceFile, origin)
-      : formatMarkdownLink(item.name, item.webViewLink);
-  }
-
-  // Ensure the Drive-link note exists (for metadata/dedup) and return a `drive-preview` EMBED rather
-  // than a wikilink — used for the paste-to-Drive flow, where the user wants to see the image inline.
-  async createAssetNoteAndEmbed(
-    item: DrivePickerItem,
-    sourceFile?: TFile | null,
-    origin: DriveNoteOrigin = "linked",
-  ): Promise<string> {
-    assertValidDrivePickerItem(item);
-    await this.openOrCreateAssetNoteFile(item, sourceFile, origin);
-    return ["```" + PREVIEW_LANG, item.id, "width: 480", "```"].join("\n");
-  }
-
-  async attachPickedFolderToFrontmatter(file: TFile): Promise<void> {
-    const item = await this.pickValidatedDriveItem({ foldersOnly: true });
-    if (!item) {
-      return;
+    switch (this.getSettings().linkFormat) {
+      case "asset-note":
+        return await this.createAssetNoteAndWikilink(item, sourceFile, origin);
+      case "inline":
+        return formatMarkdownLink(item.name, item.webViewLink);
+      case "embed":
+      default:
+        return this.formatDriveEmbedBlock(item.id);
     }
-
-    await this.attachDriveFolderToFrontmatter(file, item);
-  }
-
-  // Write a known Drive folder's webViewLink to the note's `googleDriveFolderUrl` frontmatter (the
-  // same key `openAttachedFolder` reads back). Shared by the picker-driven command and the sidebar
-  // panel's folder row action, so both paths validate + folder-check identically.
-  async attachDriveFolderToFrontmatter(file: TFile, item: DrivePickerItem): Promise<void> {
-    assertValidDrivePickerItem(item);
-
-    if (!isDriveFolder(item)) {
-      new Notice("Choose a Google Drive folder for frontmatter attach.");
-      return;
-    }
-
-    await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
-      frontmatter.googleDriveFolderUrl = item.webViewLink;
-    });
-    new Notice(`Attached Drive folder: ${item.name}`);
-  }
-
-  openAttachedFolder(file: TFile): boolean {
-    const folderUrl = this.getAttachedFolderUrl(file);
-    if (!folderUrl) {
-      new Notice("No Google Drive folder attached to this note.");
-      return false;
-    }
-
-    window.open(folderUrl);
-    return true;
-  }
-
-  hasAttachedFolder(file: TFile): boolean {
-    return this.getAttachedFolderUrl(file) !== null;
   }
 
   async refreshDriveMetadata(file: TFile): Promise<void> {
@@ -424,11 +382,6 @@ export class InsertService {
 
   private rememberAssetNotePath(driveId: string, path: string): void {
     this.assetNotePathsByDriveId.set(driveId, normalizePath(path));
-  }
-
-  private getAttachedFolderUrl(file: TFile): string | null {
-    const value: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.googleDriveFolderUrl;
-    return typeof value === "string" && value.length > 0 ? value : null;
   }
 
   private async renameAssetNoteForDriveName(file: TFile, metadata: DriveMetadata): Promise<string> {
