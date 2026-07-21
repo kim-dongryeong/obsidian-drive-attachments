@@ -380,30 +380,6 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
           });
       });
 
-    new Setting(containerEl).setName("Drive panel").setHeading();
-
-    new Setting(containerEl)
-      .setName("Drag-out format")
-      .setDesc(
-        "What dragging a Drive panel row (or selection) out onto a note inserts at the drop point. " +
-          "“Embed preview” (the default) inserts a preview embed block — folders render as a folder " +
-          "card; “Inline link” inserts a Markdown link; “Drive-link note” creates the asset note and " +
-          "inserts a wikilink to it. Hold a modifier AT THE DROP to override per-drag — ⌘/Ctrl → Drive-link note · " +
-          "⌥/Alt → embed preview · ⇧ Shift → inline link. (In-panel drag onto a folder still moves/copies.)",
-      )
-      .addDropdown((dropdown) => {
-        dropdown
-          .addOption("embed", "Embed preview (default)")
-          .addOption("link", "Inline link")
-          .addOption("note", "Drive-link note")
-          .addOption("off", "Off")
-          .setValue(this.plugin.settings.panelDragOut)
-          .onChange(async (value) => {
-            this.plugin.settings.panelDragOut = isPanelDragOutMode(value) ? value : "embed";
-            await this.plugin.saveSettings();
-          });
-      });
-
     new Setting(containerEl).setName("Drive uploads").setHeading();
 
     new Setting(containerEl)
@@ -491,6 +467,57 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
             this.plugin.settings.defaultUploadFolderName = "";
             await this.plugin.saveSettings();
           });
+      });
+
+    // ===================================================================================
+    // ADVANCED — behind the expander
+    // ===================================================================================
+
+    // Visual break so "Advanced options" reads as its own group, not a trailing part of the section above.
+    containerEl.createEl("hr", { cls: "gdab-settings-sep" });
+
+    new Setting(containerEl)
+      .setName("Advanced options")
+      .setDesc(
+        this.showAdvanced
+          ? ""
+          : "Insert format, Drive-link note options, search tuning, extra panel toggles, embed hover actions, and vault slimming.",
+      )
+      .addButton((button) => {
+        button
+          .setButtonText(this.showAdvanced ? "Hide" : "Show")
+          .onClick(() => {
+            this.showAdvanced = !this.showAdvanced;
+            this.redisplayPreservingScroll();
+          });
+      });
+
+    if (!this.showAdvanced) {
+      return;
+    }
+
+    new Setting(containerEl).setName("Credentials").setHeading();
+
+    new Setting(containerEl)
+      .setName("Use different credentials")
+      .setDesc(
+        "Switch to a different Google Cloud project — import that project's OAuth client JSON. " +
+          "Replacing credentials signs you out first, then reconnects with the new ones automatically.",
+      )
+      .addButton((button) => {
+        button
+          .setButtonText("Re-import .json file")
+          .onClick(async () => {
+            if (await this.plugin.importCredentialsJson()) {
+              if (this.plugin.auth.isConnected) {
+                await this.plugin.auth.disconnect();
+              }
+              await this.connectWithStatus("Connecting to Google Drive");
+            }
+          });
+      })
+      .addButton((button) => {
+        button.setButtonText("Paste JSON").onClick(() => this.openPasteJsonModal());
       });
 
     new Setting(containerEl).setName("Link insertion").setHeading();
@@ -603,57 +630,6 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
         text.inputEl.addClass("gdab-extra-frontmatter-textarea");
       });
 
-    // ===================================================================================
-    // ADVANCED — behind the expander
-    // ===================================================================================
-
-    // Visual break so "Advanced options" reads as its own group, not a trailing part of the section above.
-    containerEl.createEl("hr", { cls: "gdab-settings-sep" });
-
-    new Setting(containerEl)
-      .setName("Advanced options")
-      .setDesc(
-        this.showAdvanced
-          ? ""
-          : "Search tuning, extra panel toggles, Drive-link note blocks, embed hover actions, and vault slimming.",
-      )
-      .addButton((button) => {
-        button
-          .setButtonText(this.showAdvanced ? "Hide" : "Show")
-          .onClick(() => {
-            this.showAdvanced = !this.showAdvanced;
-            this.redisplayPreservingScroll();
-          });
-      });
-
-    if (!this.showAdvanced) {
-      return;
-    }
-
-    new Setting(containerEl).setName("Credentials").setHeading();
-
-    new Setting(containerEl)
-      .setName("Use different credentials")
-      .setDesc(
-        "Switch to a different Google Cloud project — import that project's OAuth client JSON. " +
-          "Replacing credentials signs you out first, then reconnects with the new ones automatically.",
-      )
-      .addButton((button) => {
-        button
-          .setButtonText("Re-import .json file")
-          .onClick(async () => {
-            if (await this.plugin.importCredentialsJson()) {
-              if (this.plugin.auth.isConnected) {
-                await this.plugin.auth.disconnect();
-              }
-              await this.connectWithStatus("Connecting to Google Drive");
-            }
-          });
-      })
-      .addButton((button) => {
-        button.setButtonText("Paste JSON").onClick(() => this.openPasteJsonModal());
-      });
-
     new Setting(containerEl).setName("Search").setHeading();
 
     new Setting(containerEl)
@@ -731,6 +707,27 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
           });
       });
 
+    new Setting(containerEl)
+      .setName("Drag-out format")
+      .setDesc(
+        "What dragging a Drive panel row (or selection) out onto a note inserts at the drop point. " +
+          "“Embed preview” (the default) inserts a preview embed block — folders render as a folder " +
+          "card; “Inline link” inserts a Markdown link; “Drive-link note” creates the asset note and " +
+          "inserts a wikilink to it. Hold a modifier AT THE DROP to override per-drag — ⌘/Ctrl → Drive-link note · " +
+          "⌥/Alt → embed preview · ⇧ Shift → inline link. (In-panel drag onto a folder still moves/copies.)",
+      )
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("embed", "Embed preview (default)")
+          .addOption("link", "Inline link")
+          .addOption("note", "Drive-link note")
+          .addOption("off", "Off")
+          .setValue(this.plugin.settings.panelDragOut)
+          .onChange(async (value) => {
+            this.plugin.settings.panelDragOut = isPanelDragOutMode(value) ? value : "embed";
+            await this.plugin.saveSettings();
+          });
+      });
 
     new Setting(containerEl)
       .setName("Details bar")
