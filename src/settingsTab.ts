@@ -65,51 +65,6 @@ class PasteJsonCredentialsModal extends Modal {
   }
 }
 
-// Small modal for entering a Drive folder link/ID for a setting (currently: default upload folder)
-// without keeping the raw ID visible in a persistent text field. Follows PasteJsonCredentialsModal's
-// shape: one input, hint text, OK/Cancel. onSubmit gets the raw (possibly empty) trimmed value.
-class FolderLinkOrIdModal extends Modal {
-  private value: string;
-
-  constructor(app: App, currentValue: string, private readonly onSubmit: (value: string) => void | Promise<void>) {
-    super(app);
-    this.value = currentValue;
-  }
-
-  onOpen(): void {
-    const { contentEl } = this;
-    contentEl.createEl("h3", { text: "Folder link or ID" });
-    contentEl.createEl("p", {
-      text: "Paste a folder link from drive.google.com, or its ID. Leave empty to use Drive root.",
-      cls: "setting-item-description",
-    });
-    const input = contentEl.createEl("input", { type: "text", cls: "gdab-folder-link-input" });
-    input.value = this.value;
-    input.addEventListener("input", () => {
-      this.value = input.value;
-    });
-    input.addEventListener("keydown", (evt) => {
-      if (evt.key === "Enter") {
-        evt.preventDefault();
-        this.submit();
-      }
-    });
-    const buttons = contentEl.createDiv({ cls: "gdab-folder-link-buttons" });
-    buttons.createEl("button", { text: "OK", cls: "mod-cta" }).addEventListener("click", () => this.submit());
-    buttons.createEl("button", { text: "Cancel" }).addEventListener("click", () => this.close());
-    window.setTimeout(() => input.focus(), 0);
-  }
-
-  private submit(): void {
-    this.close();
-    void this.onSubmit(this.value.trim());
-  }
-
-  onClose(): void {
-    this.contentEl.empty();
-  }
-}
-
 export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
   private readonly uploadFolderPathCache = new Map<string, string>();
   // Everything the basic list doesn't need is hidden behind the "Advanced options" expander.
@@ -486,8 +441,8 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
       .setName("Default upload folder")
       .setDesc(
         this.plugin.settings.defaultUploadFolderId
-          ? `Uploads go to: ${this.plugin.settings.defaultUploadFolderName || "the folder below"}.`
-          : "Uploads go to your Google Drive root — the first upload will create an “Obsidian Drive Attachments” folder there for you.",
+          ? ""
+          : "You'll choose a folder the first time you upload.",
       )
       .addButton((button) => {
         button
@@ -516,37 +471,17 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
               roots,
               initialPath: [{ ...MY_DRIVE_ROOT }],
               createFolder: (name, parent) => this.plugin.upload.createFolder(name, parent),
+              allowLinkEntry: true,
               onChoose: (folder) => {
                 void (async () => {
                   this.uploadFolderPathCache.delete(this.plugin.settings.defaultUploadFolderId);
                   this.plugin.settings.defaultUploadFolderId = folder.id;
                   this.plugin.settings.defaultUploadFolderName = folder.name;
                   await this.plugin.saveSettings();
-                  new Notice(`Default upload folder: ${folder.name}`);
+                  new Notice(`Default upload folder: ${folder.name || "set"}`);
                   this.redisplayPreservingScroll();
                 })();
               },
-            }).open();
-          });
-      })
-      .addButton((button) => {
-        button
-          .setIcon("link")
-          .setTooltip("Enter folder link or ID")
-          .onClick(() => {
-            new FolderLinkOrIdModal(this.app, this.plugin.settings.defaultUploadFolderId, async (value) => {
-              const folderId = normalizeDriveFolderId(value);
-              this.uploadFolderPathCache.delete(this.plugin.settings.defaultUploadFolderId);
-              if (!folderId) {
-                this.plugin.settings.defaultUploadFolderId = "";
-                this.plugin.settings.defaultUploadFolderName = "";
-              } else {
-                this.plugin.settings.defaultUploadFolderId = folderId;
-                this.plugin.settings.defaultUploadFolderName = "";
-              }
-              await this.plugin.saveSettings();
-              new Notice(folderId ? "Default upload folder updated." : "Default upload folder cleared — uploads go to Drive root.");
-              this.redisplayPreservingScroll();
             }).open();
           });
       });
@@ -1061,30 +996,6 @@ function createExtraFrontmatterDescription(assetNoteOnlyHint: string): DocumentF
   );
   fragment.createEl("pre", { text: ASSET_NOTE_EXTRA_FRONTMATTER_EXAMPLE });
   return fragment;
-}
-
-// Users naturally paste a Drive folder URL copied from the browser address bar into the manual
-// folder-ID field rather than the bare ID. Stored verbatim, that URL becomes an invalid `parents[]`
-// value and every upload fails with a confusing non-permission error — so not even the folder-write
-// root fallback (which only fires on `insufficientFilePermissions` 403s) kicks in. Extract the ID
-// from the common Drive folder-URL shapes; pass a bare ID — or anything we don't recognize — through
-// unchanged so the field still accepts a raw folder ID.
-function normalizeDriveFolderId(raw: string): string {
-  const value = raw.trim();
-  if (!value) {
-    return "";
-  }
-  // https://drive.google.com/drive/folders/<ID>  (also /drive/u/0/folders/<ID>, optional ?usp=…)
-  const folderMatch = value.match(/\/folders\/([A-Za-z0-9_-]+)/);
-  if (folderMatch) {
-    return folderMatch[1];
-  }
-  // https://drive.google.com/open?id=<ID>  (or any …?id=/&id= form)
-  const idParamMatch = value.match(/[?&]id=([A-Za-z0-9_-]+)/);
-  if (idParamMatch) {
-    return idParamMatch[1];
-  }
-  return value;
 }
 
 function findScrollContainer(start: HTMLElement): HTMLElement {

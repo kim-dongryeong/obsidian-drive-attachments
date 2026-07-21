@@ -15,7 +15,9 @@ import { DriveSearchService } from "./driveSearchService";
 import { DriveTrashService } from "./driveTrashService";
 import { DriveUploadResult, DriveUploadService, FileUploadSource } from "./driveUploadService";
 import { DriveNoteActionsService } from "./driveNoteActionsService";
-import { DropController, makeUploadPlaceholder, replacePlaceholder } from "./dropController";
+import { DropController, makeUploadPlaceholder, removePlaceholder, replacePlaceholder } from "./dropController";
+import { PanelFolderPickerModal } from "./drivePanelModals";
+import { MY_DRIVE_ROOT, DrivePanelLocation } from "./drivePanelLocation";
 import { PanelDragModifierTracker } from "./panelDragModifierTracker";
 import { ACTIONS_LANGS, PREVIEW_LANGS } from "./codeBlockLang";
 import { InsertService } from "./insertService";
@@ -49,8 +51,8 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
   // macOS modifier expects so the OS accepts the drop), and the editor-drop (reads the drop-time mode).
   panelDragModifiers!: PanelDragModifierTracker;
   // Memoized in-flight promise for ensureDefaultUploadFolder() so concurrent first uploads (e.g. a
-  // multi-file drop) can't race and each create their own "Obsidian Drive Attachments" folder.
-  private ensureDefaultUploadFolderPromise: Promise<{ folderId: string | undefined; created: boolean }> | null = null;
+  // multi-file drop) share one folder-picker modal instead of each opening their own.
+  private ensureDefaultUploadFolderPromise: Promise<string | null> | null = null;
 
   onunload(): void {
     // Release preview blob URLs / cached data URLs so their byte buffers can be GC'd.
@@ -385,7 +387,12 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
           const placeholder = makeUploadPlaceholder(file.name);
           editor.replaceSelection(placeholder);
           new Notice(`Uploading to Google Drive: ${file.name}`);
-          const { folderId: parentFolderId, created: createdDefaultFolder } = await this.ensureDefaultUploadFolder();
+          const parentFolderId = await this.ensureDefaultUploadFolder();
+          if (parentFolderId === null) {
+            removePlaceholder(editor, placeholder);
+            new Notice("Upload cancelled — no upload folder chosen.");
+            return;
+          }
           let result: DriveUploadResult;
           try {
             result = await this.upload.uploadFile({
@@ -410,12 +417,6 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
             );
           } else {
             new Notice(`Uploaded to Google Drive: ${result.item.name}`);
-            if (createdDefaultFolder) {
-              new Notice(
-                "Uploaded to the new “Obsidian Drive Attachments” folder in your Drive. You can change where uploads go in Settings → Default upload folder.",
-                10000,
-              );
-            }
           }
         } catch (error) {
           new Notice(`Upload to Drive failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -511,38 +512,58 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
     );
   }
 
-  // First-upload auto-folder (root stays clean): when no default upload folder is set, find-or-create
-  // an "Obsidian Drive Attachments" folder in My Drive root, save it as the default, and return it.
-  // `created` is true both when the folder is freshly created AND when an existing one is adopted for
-  // the first time — either way the caller should tell the user once. Memoized on
-  // ensureDefaultUploadFolderPromise so concurrent uploads (a multi-file drop) can't create two
-  // folders; any Drive error falls back to { folderId: undefined, created: false } (upload to root)
-  // rather than ever blocking the upload.
-  async ensureDefaultUploadFolder(): Promise<{ folderId: string | undefined; created: boolean }> {
+  // First upload forces the folder choice: when no default upload folder is set, open the folder
+  // picker (with the link/ID disclosure) and wait for the user to pick or create one — nothing is
+  // auto-created. Resolves the chosen folder id, or null if the picker was cancelled. Memoized on
+  // ensureDefaultUploadFolderPromise so concurrent uploads (a multi-file drop) share one modal instead
+  // of each opening its own.
+  async ensureDefaultUploadFolder(): Promise<string | null> {
     if (this.settings.defaultUploadFolderId) {
-      return { folderId: this.settings.defaultUploadFolderId, created: false };
+      return this.settings.defaultUploadFolderId;
     }
     if (!this.ensureDefaultUploadFolderPromise) {
-      this.ensureDefaultUploadFolderPromise = this.createOrAdoptDefaultUploadFolder().finally(() => {
+      this.ensureDefaultUploadFolderPromise = this.promptForDefaultUploadFolder().finally(() => {
         this.ensureDefaultUploadFolderPromise = null;
       });
     }
     return this.ensureDefaultUploadFolderPromise;
   }
 
-  private async createOrAdoptDefaultUploadFolder(): Promise<{ folderId: string | undefined; created: boolean }> {
-    const folderName = "Obsidian Drive Attachments";
+  private async promptForDefaultUploadFolder(): Promise<string | null> {
+    // Offer shared drives alongside My Drive (best-effort — a fetch failure just means the picker
+    // starts from My Drive only, same as the panel before its roots load).
+    const roots: DrivePanelLocation[] = [{ ...MY_DRIVE_ROOT }];
     try {
-      const existingId = await this.upload.findFolderByName(folderName);
-      const folderId = existingId ?? (await this.upload.createFolder(folderName));
-      this.settings.defaultUploadFolderId = folderId;
-      this.settings.defaultUploadFolderName = folderName;
-      await this.saveSettings();
-      return { folderId, created: true };
-    } catch (error) {
-      console.warn("[Drive Attachments] Could not create/adopt the default upload folder; uploading to root.", error);
-      return { folderId: undefined, created: false };
+      const sharedDrives = await this.metadata.listSharedDriveRoots();
+      roots.push(...sharedDrives.map((root) => ({ id: root.id, name: root.name })));
+    } catch {
+      // ignore — My Drive root alone still works
     }
+
+    return new Promise<string | null>((resolve) => {
+      new PanelFolderPickerModal(this.app, {
+        title: "Choose your upload folder",
+        detail: "Pick where uploads from your notes will land — you can change this anytime in settings.",
+        actionLabel: "Use this folder",
+        metadata: this.metadata,
+        roots,
+        initialPath: [{ ...MY_DRIVE_ROOT }],
+        createFolder: (name, parent) => this.upload.createFolder(name, parent),
+        allowLinkEntry: true,
+        onChoose: (folder) => {
+          void (async () => {
+            this.settings.defaultUploadFolderId = folder.id;
+            this.settings.defaultUploadFolderName = folder.name;
+            await this.saveSettings();
+            new Notice(`Default upload folder: ${folder.name || "set"} — change it anytime in Settings.`);
+            resolve(folder.id);
+          })();
+        },
+        onCancel: () => {
+          resolve(null);
+        },
+      }).open();
+    });
   }
 
   // Dedup must never block an upload (DONE-WHEN "Non-blocking + safe"): DriveDedupService already

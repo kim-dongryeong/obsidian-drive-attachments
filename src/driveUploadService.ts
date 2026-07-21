@@ -109,44 +109,6 @@ export class DriveUploadService {
     return parseCreatedFolderId(response);
   }
 
-  // Look up a folder by exact name under a parent ('root' when omitted) so first-upload
-  // auto-provisioning can reuse an existing "Obsidian Drive Attachments" folder instead of creating
-  // a duplicate. Returns null on no match OR any Drive error — the caller falls back to creating one.
-  async findFolderByName(name: string, parentFolderId?: string): Promise<string | null> {
-    const accessToken = await this.auth.getAccessToken();
-    const escapedName = name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-    const parent = parentFolderId ?? "root";
-    const query = `name = '${escapedName}' and '${parent}' in parents and mimeType = '${DRIVE_FOLDER_MIME_TYPE}' and trashed = false`;
-
-    const url = new URL(DRIVE_FILES_URL);
-    url.searchParams.set("q", query);
-    url.searchParams.set("fields", "files(id)");
-    url.searchParams.set("pageSize", "1");
-    url.searchParams.set("supportsAllDrives", "true");
-    url.searchParams.set("includeItemsFromAllDrives", "true");
-
-    const response = await requestUrl({
-      url: url.toString(),
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-      throw: false,
-    });
-
-    if (response.status < 200 || response.status >= 300 || !response.text) {
-      return null;
-    }
-
-    try {
-      const parsed = JSON.parse(response.text) as { files?: Array<{ id?: unknown }> };
-      const id = parsed.files?.[0]?.id;
-      return isNonEmptyString(id) ? id : null;
-    } catch {
-      return null;
-    }
-  }
-
   private async uploadBySize(input: DriveUploadInput, accessToken: string): Promise<RequestUrlResponse> {
     if (input.source.size <= MULTIPART_UPLOAD_LIMIT_BYTES) {
       return this.uploadMultipart(input, accessToken);

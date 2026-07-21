@@ -97,10 +97,11 @@ export class MigrateNoteAttachmentsPreviewModal extends Modal {
     private readonly upload: DriveUploadService,
     private readonly insert: InsertService,
     private readonly settings: GoogleDriveAttachmentBridgeSettings,
-    // First-upload auto-folder: resolves (creating/adopting on first use) the "Obsidian Drive
-    // Attachments" default folder when none is set, so a migration run never scatters uploads across
-    // Drive root. Injected from main.ts (wraps plugin.ensureDefaultUploadFolder).
-    private readonly ensureDefaultUploadFolder: () => Promise<{ folderId: string | undefined; created: boolean }>,
+    // First upload forces the folder choice: resolves the default upload folder, opening a picker
+    // modal when none is set yet, so a migration run never scatters uploads across Drive root.
+    // Resolves null if that picker is cancelled. Injected from main.ts (wraps
+    // plugin.ensureDefaultUploadFolder).
+    private readonly ensureDefaultUploadFolder: () => Promise<string | null>,
   ) {
     super(app);
   }
@@ -269,6 +270,16 @@ export class MigrateNoteAttachmentsPreviewModal extends Modal {
     this.executing = true;
     this.confirmButton?.setDisabled(true).setButtonText("Migrating…");
 
+    // Resolve (or let the user choose) the upload folder ONCE, before any candidate is touched — a
+    // cancelled folder picker aborts the whole run rather than uploading some files and stalling on
+    // others.
+    if ((await this.ensureDefaultUploadFolder()) === null) {
+      new Notice("Migration cancelled — no upload folder chosen.");
+      this.executing = false;
+      this.confirmButton?.setDisabled(false).setButtonText("Confirm");
+      return;
+    }
+
     const outcomes: MigrationOutcome[] = [];
     for (const candidate of this.candidates) {
       const plan = this.plans.get(candidate.file.path) ?? (await this.buildMigrationUploadPlan(candidate));
@@ -394,19 +405,15 @@ export class MigrateNoteAttachmentsPreviewModal extends Modal {
       // vault.readBinary only hands out whole buffers, so migration keeps the buffer-backed source
       // (no streaming win here — vault attachments were small enough to live in the vault).
       const data = await this.app.vault.readBinary(plan.candidate.file);
-      const { folderId: parentFolderId, created: createdDefaultFolder } = await this.ensureDefaultUploadFolder();
+      // Already resolved once up front in execute() before any upload started; settings.defaultUploadFolderId
+      // is set by then, so this just reads it back (no re-prompt).
+      const parentFolderId = await this.ensureDefaultUploadFolder();
       const uploaded = await this.upload.uploadFile({
         name: plan.candidate.file.name,
         mimeType: getLocalAttachmentMimeType(plan.candidate.file),
         source: new BufferUploadSource(data),
-        parentFolderId,
+        parentFolderId: parentFolderId ?? undefined,
       });
-      if (createdDefaultFolder) {
-        new Notice(
-          "Uploaded to the new “Obsidian Drive Attachments” folder in your Drive. You can change where uploads go in Settings → Default upload folder.",
-          10000,
-        );
-      }
       item = uploaded.item;
       source = "uploaded";
       usedRootFallback = uploaded.usedRootFallback;
@@ -630,7 +637,7 @@ export function openMigrateNoteAttachmentsPreview(
   upload: DriveUploadService,
   insert: InsertService,
   settings: GoogleDriveAttachmentBridgeSettings,
-  ensureDefaultUploadFolder: () => Promise<{ folderId: string | undefined; created: boolean }>,
+  ensureDefaultUploadFolder: () => Promise<string | null>,
 ): void {
   const activeFile = app.workspace.getActiveFile();
   if (!(activeFile instanceof TFile) || activeFile.extension !== "md") {

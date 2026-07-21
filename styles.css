@@ -3851,6 +3851,49 @@
   margin-top: 16px;
 }
 
+/* Collapsed "Use a folder link or ID" disclosure at the bottom of the folder picker. */
+.gdab-folder-picker-link-row {
+  margin-top: 14px;
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 10px;
+}
+.gdab-folder-picker-link-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 13px;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.gdab-folder-picker-link-toggle:hover {
+  color: var(--text-normal);
+}
+.gdab-folder-picker-link-chevron {
+  --icon-size: 14px;
+  transition: transform 0.1s ease-in-out;
+}
+.gdab-folder-picker-link-row.is-expanded .gdab-folder-picker-link-chevron {
+  transform: rotate(90deg);
+}
+.gdab-folder-picker-link-body {
+  margin-top: 8px;
+}
+.gdab-folder-picker-link-hint {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.gdab-folder-picker-link-input-row {
+  display: flex;
+  gap: 8px;
+}
+.gdab-folder-picker-link-input {
+  flex: 1;
+}
+
 /* Utility: a programmatically-triggered <input type=file> that must not occupy layout.
    Replaces inline `style.display = "none"` (Obsidian review: no static style assignment). */
 .gdab-hidden-file-input {
@@ -3892,18 +3935,6 @@
   resize: vertical;
 }
 .gdab-paste-json-buttons {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  margin-top: 12px;
-}
-
-/* Folder link/ID entry modal (default upload folder). */
-.gdab-folder-link-input {
-  width: 100%;
-  margin-top: 8px;
-}
-.gdab-folder-link-buttons {
   display: flex;
   gap: 8px;
   justify-content: flex-end;

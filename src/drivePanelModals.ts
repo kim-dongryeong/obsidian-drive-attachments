@@ -10,6 +10,7 @@ import { formatCount } from "./drivePanelText";
 import { describePanelDropItems } from "./drivePanelDropUtil";
 import { folderColorHex } from "./drivePanelFormat";
 import { DrivePanelLocation, MY_DRIVE_ROOT } from "./drivePanelLocation";
+import { normalizeDriveFolderId } from "./driveFolderLink";
 
 export interface PanelDropConfirmOptions {
   entries: FileSystemEntry[];
@@ -370,6 +371,12 @@ export interface PanelFolderPickerOptions {
   // Optional "New folder" affordance in the picker's button row: creates a folder under the currently
   // browsed location (undefined = My Drive root) and returns its id. Absent → the button is hidden.
   createFolder?: (name: string, parentFolderId: string | undefined) => Promise<string>;
+  // Optional collapsed "Use a folder link or ID" disclosure at the bottom of the modal, letting a
+  // folder be chosen by pasted link/ID instead of browsing. Absent → the disclosure is hidden.
+  allowLinkEntry?: boolean;
+  // Called from onClose when the modal closes WITHOUT a folder having been chosen (Cancel, Esc,
+  // clicking outside) — never called after onChoose already fired.
+  onCancel?: () => void;
 }
 
 export class PanelFolderPickerModal extends Modal {
@@ -378,6 +385,9 @@ export class PanelFolderPickerModal extends Modal {
   private loading = false;
   private errorMessage: string | null = null;
   private generation = 0;
+  private chosen = false;
+  private linkEntryExpanded = false;
+  private linkEntryValue = "";
 
   constructor(app: App, private readonly options: PanelFolderPickerOptions) {
     super(app);
@@ -387,6 +397,12 @@ export class PanelFolderPickerModal extends Modal {
   onOpen(): void {
     this.render();
     void this.loadCurrentFolder();
+  }
+
+  onClose(): void {
+    if (!this.chosen) {
+      this.options.onCancel?.();
+    }
   }
 
   private get currentLocation(): DrivePanelLocation {
@@ -429,6 +445,67 @@ export class PanelFolderPickerModal extends Modal {
     const chooseButton = buttons.createEl("button", { cls: "mod-cta", text: this.options.actionLabel });
     chooseButton.disabled = this.loading || this.isExcluded(this.currentLocation.id);
     chooseButton.addEventListener("click", () => this.chooseCurrentFolder());
+
+    if (this.options.allowLinkEntry) {
+      this.renderLinkEntry(contentEl);
+    }
+  }
+
+  // Collapsed-by-default disclosure offering a folder link/ID as an alternative to browsing —
+  // handy when the target folder is buried deep or was just shared as a link.
+  private renderLinkEntry(contentEl: HTMLElement): void {
+    const row = contentEl.createDiv({
+      cls: `gdab-folder-picker-link-row${this.linkEntryExpanded ? " is-expanded" : ""}`,
+    });
+    const toggle = row.createEl("button", { cls: "gdab-folder-picker-link-toggle" });
+    const chevron = toggle.createSpan({ cls: "gdab-folder-picker-link-chevron", attr: { "aria-hidden": "true" } });
+    setIcon(chevron, "chevron-right");
+    toggle.createSpan({ text: "Use a folder link or ID" });
+    toggle.setAttribute("aria-expanded", String(this.linkEntryExpanded));
+    toggle.addEventListener("click", () => {
+      this.linkEntryExpanded = !this.linkEntryExpanded;
+      this.render();
+    });
+
+    if (!this.linkEntryExpanded) {
+      return;
+    }
+
+    const linkBody = row.createDiv({ cls: "gdab-folder-picker-link-body" });
+    linkBody.createEl("p", {
+      cls: "gdab-folder-picker-link-hint",
+      text: "Paste a folder link from drive.google.com, or its ID.",
+    });
+    const inputRow = linkBody.createDiv({ cls: "gdab-folder-picker-link-input-row" });
+    const input = inputRow.createEl("input", {
+      type: "text",
+      cls: "gdab-folder-picker-link-input",
+      attr: { "aria-label": "Folder link or ID" },
+    });
+    input.value = this.linkEntryValue;
+    input.addEventListener("input", () => {
+      this.linkEntryValue = input.value;
+    });
+    input.addEventListener("keydown", (evt) => {
+      if (evt.key === "Enter") {
+        evt.preventDefault();
+        this.confirmLinkEntry();
+      }
+    });
+    const confirmButton = inputRow.createEl("button", { cls: "mod-cta", text: "Use folder" });
+    confirmButton.addEventListener("click", () => this.confirmLinkEntry());
+    window.setTimeout(() => input.focus(), 0);
+  }
+
+  private confirmLinkEntry(): void {
+    const folderId = normalizeDriveFolderId(this.linkEntryValue);
+    if (!folderId) {
+      new Notice("Enter a folder link or ID.");
+      return;
+    }
+    this.chosen = true;
+    this.close();
+    this.options.onChoose({ id: folderId, name: "" });
   }
 
   // Creates a folder under the currently browsed location (undefined = My Drive root, matching
@@ -570,6 +647,7 @@ export class PanelFolderPickerModal extends Modal {
       new Notice(this.options.excludedNotice ?? "Choose a different folder.");
       return;
     }
+    this.chosen = true;
     this.close();
     this.options.onChoose({ ...folder });
   }

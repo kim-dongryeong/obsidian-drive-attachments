@@ -35,11 +35,11 @@ export class DropController {
     private readonly metadata: DriveMetadataService,
     private readonly getSettings: () => GoogleDriveAttachmentBridgeSettings,
     private readonly panelDragModifiers: PanelDragModifierTracker,
-    // First-upload auto-folder (root stays clean): resolves the default upload folder, creating/adopting
-    // an "Obsidian Drive Attachments" folder in My Drive root on the very first upload. Injected from
-    // main.ts (wraps plugin.ensureDefaultUploadFolder) so this controller stays free of Plugin/settings
-    // persistence concerns.
-    private readonly ensureDefaultUploadFolder: () => Promise<{ folderId: string | undefined; created: boolean }>,
+    // First upload forces the folder choice: resolves the default upload folder, opening a picker
+    // modal on the very first upload if none is set yet. Resolves null if that picker is cancelled.
+    // Injected from main.ts (wraps plugin.ensureDefaultUploadFolder) so this controller stays free of
+    // Plugin/settings persistence concerns.
+    private readonly ensureDefaultUploadFolder: () => Promise<string | null>,
   ) {}
 
   /**
@@ -269,10 +269,16 @@ export class DropController {
     editor.setCursor(editor.offsetToPos(editor.posToOffset(dropPosition) + placeholderText.length));
     new Notice(`Uploading ${files.length} dropped file(s) to Google Drive…`);
 
-    const { folderId: parentFolderId, created: createdDefaultFolder } = await this.ensureDefaultUploadFolder();
-    // Only shown once per creation (created is only true on the call that created/adopted the folder),
-    // even though this loop may upload several files against the same resolved folderId.
-    let announcedDefaultFolder = false;
+    const parentFolderId = await this.ensureDefaultUploadFolder();
+    if (parentFolderId === null) {
+      // Cancelled the folder picker — abort the whole drop cleanly, removing every placeholder it
+      // inserted (same cleanup as an individual upload failure below, just for the full batch).
+      for (const placeholder of placeholders) {
+        removePlaceholder(editor, placeholder);
+      }
+      new Notice("Upload cancelled — no upload folder chosen.");
+      return;
+    }
 
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index];
@@ -322,13 +328,6 @@ export class DropController {
           );
         } else {
           new Notice(`Uploaded to Google Drive: ${result.item.name}`);
-          if (createdDefaultFolder && !announcedDefaultFolder) {
-            announcedDefaultFolder = true;
-            new Notice(
-              "Uploaded to the new “Obsidian Drive Attachments” folder in your Drive. You can change where uploads go in Settings → Default upload folder.",
-              10000,
-            );
-          }
         }
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
@@ -538,7 +537,7 @@ export function replacePlaceholder(editor: Editor, placeholder: string, replacem
   return true;
 }
 
-function removePlaceholder(editor: Editor, placeholder: string): boolean {
+export function removePlaceholder(editor: Editor, placeholder: string): boolean {
   const value = editor.getValue();
   const offset = value.indexOf(placeholder);
   if (offset === -1) {
