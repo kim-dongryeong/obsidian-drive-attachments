@@ -118,6 +118,8 @@ Your sign-in stays on your own computer — saved only inside your vault at `<va
 
 **Search finds nothing / connection issues.** Make sure the **Google Drive API** is turned on for your project, then reconnect from the plugin settings.
 
+**Choosing where uploads go.** In settings → Default upload folder, click the folder button to browse your Drive, or paste the folder's link straight from drive.google.com. Leave it empty to upload to your Drive root.
+
 **Deleting files the plugin didn’t upload.** By default the plugin can only delete files it created. To let it delete anything in your Drive, grant full Drive access in the plugin settings (and on the Google consent screen) — enable this only if you’re comfortable with that.
 
 Found a bug or have an idea? [Open an issue on GitHub](https://github.com/kim-dongryeong/obsidian-drive-attachments/issues).

@@ -1,5 +1,6 @@
 import { App, debounce, Modal, Notice, PluginSettingTab, Setting } from "obsidian";
-import { isDriveFolder } from "./driveTypes";
+import { PanelFolderPickerModal } from "./drivePanelModals";
+import { MY_DRIVE_ROOT, type DrivePanelLocation } from "./drivePanelLocation";
 import {
   ASSET_NOTE_EXTRA_FRONTMATTER_EXAMPLE,
   DEFAULT_ASSET_NOTE_FOLDER_PATH,
@@ -404,57 +405,54 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
     const uploadFolderSetting = new Setting(containerEl)
       .setName("Default upload folder")
       .setDesc(
-        this.plugin.settings.defaultUploadFolderId
-          ? `Uploads target: ${this.plugin.settings.defaultUploadFolderName || this.plugin.settings.defaultUploadFolderId}. If Drive rejects folder writes under drive.file, uploads fall back to root.`
-          : "Uploads target Google Drive root until you choose a folder. Folder-write access needs live verification.",
+        (this.plugin.settings.defaultUploadFolderId
+          ? `Uploads go to: ${this.plugin.settings.defaultUploadFolderName || this.plugin.settings.defaultUploadFolderId}.`
+          : "Uploads go to your Google Drive root.") +
+          " Pick a folder with the folder button, or paste a folder's link (or ID) from drive.google.com — " +
+          "the ID is extracted automatically. Leave empty for Drive root.",
       )
       .addButton((button) => {
         button
-          .setButtonText("Choose folder")
+          .setIcon("folder-open")
+          .setTooltip("Browse Drive folders")
           .onClick(async () => {
-            try {
-              const accessToken = await this.plugin.auth.getAccessToken();
-              const item = await this.plugin.picker.pickFileOrFolder(accessToken, { foldersOnly: true });
-              if (!item) {
-                return;
-              }
-              if (!isDriveFolder(item)) {
-                new Notice("Choose a Google Drive folder for uploads.");
-                return;
-              }
-
-              this.plugin.settings.defaultUploadFolderId = item.id;
-              this.plugin.settings.defaultUploadFolderName = item.name;
-              await this.plugin.saveSettings();
-              new Notice(`Default upload folder: ${item.name}`);
-              this.redisplayPreservingScroll();
-            } catch (error) {
-              new Notice(`Choose upload folder failed: ${error instanceof Error ? error.message : String(error)}`);
+            if (!this.plugin.auth.isConnected) {
+              new Notice("Connect Google Drive first to browse folders.");
+              return;
             }
+
+            // Offer shared drives alongside My Drive (best-effort — a fetch failure just means the
+            // picker starts from My Drive only, same as the panel before its roots load).
+            const roots: DrivePanelLocation[] = [{ ...MY_DRIVE_ROOT }];
+            try {
+              const sharedDrives = await this.plugin.metadata.listSharedDriveRoots();
+              roots.push(...sharedDrives.map((root) => ({ id: root.id, name: root.name })));
+            } catch {
+              // ignore — My Drive root alone still works
+            }
+            new PanelFolderPickerModal(this.app, {
+              title: "Default upload folder",
+              detail: "Uploads from your notes will land in this folder.",
+              actionLabel: "Use this folder",
+              metadata: this.plugin.metadata,
+              roots,
+              initialPath: [{ ...MY_DRIVE_ROOT }],
+              onChoose: (folder) => {
+                void (async () => {
+                  this.uploadFolderPathCache.delete(this.plugin.settings.defaultUploadFolderId);
+                  this.plugin.settings.defaultUploadFolderId = folder.id;
+                  this.plugin.settings.defaultUploadFolderName = folder.name;
+                  await this.plugin.saveSettings();
+                  new Notice(`Default upload folder: ${folder.name}`);
+                  this.redisplayPreservingScroll();
+                })();
+              },
+            }).open();
           });
       })
-      .addButton((button) => {
-        button
-          .setButtonText("Use root")
-          .onClick(async () => {
-            this.uploadFolderPathCache.delete(this.plugin.settings.defaultUploadFolderId);
-            this.plugin.settings.defaultUploadFolderId = "";
-            this.plugin.settings.defaultUploadFolderName = "";
-            await this.plugin.saveSettings();
-            new Notice("Default upload folder cleared. Uploads will target Google Drive root.");
-            this.redisplayPreservingScroll();
-          });
-      });
-    this.appendUploadFolderPath(uploadFolderSetting.descEl);
-
-    new Setting(containerEl)
-      .setName("Default upload folder ID")
-      .setDesc(
-        "Optional manual fallback when Picker is unavailable. Paste a Drive folder ID; folder writes still need live drive.file verification.",
-      )
       .addText((text) => {
         text
-          .setPlaceholder("Drive folder ID")
+          .setPlaceholder("Folder link or ID — empty = Drive root")
           .setValue(this.plugin.settings.defaultUploadFolderId)
           .onChange(async (value) => {
             const folderId = normalizeDriveFolderId(value);
@@ -463,11 +461,13 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
             if (folderId !== value.trim()) {
               text.setValue(folderId);
             }
+            this.uploadFolderPathCache.delete(this.plugin.settings.defaultUploadFolderId);
             this.plugin.settings.defaultUploadFolderId = folderId;
             this.plugin.settings.defaultUploadFolderName = "";
             await this.plugin.saveSettings();
           });
       });
+    this.appendUploadFolderPath(uploadFolderSetting.descEl);
 
     // ===================================================================================
     // ADVANCED — behind the expander
