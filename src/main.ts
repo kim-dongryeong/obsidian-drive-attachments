@@ -132,7 +132,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
       this.forceRefreshDrivePreviews();
     });
     this.panelDragModifiers = new PanelDragModifierTracker();
-    this.dropController = new DropController(this.app, this.upload, this.insert, this.dedup, this.metadata, () => this.settings, this.panelDragModifiers, () => this.ensureDefaultUploadFolder());
+    this.dropController = new DropController(this.app, this.upload, this.insert, this.dedup, this.metadata, () => this.settings, this.panelDragModifiers, () => this.ensureDefaultUploadFolder(), () => this.promptConnectIfNeeded());
 
     this.addSettingTab(new GoogleDriveAttachmentBridgeSettingTab(this.app, this));
     this.registerView(

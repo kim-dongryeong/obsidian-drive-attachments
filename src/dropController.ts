@@ -40,6 +40,9 @@ export class DropController {
     // Injected from main.ts (wraps plugin.ensureDefaultUploadFolder) so this controller stays free of
     // Plugin/settings persistence concerns.
     private readonly ensureDefaultUploadFolder: () => Promise<string | null>,
+    // Returns true when connected; otherwise opens the Connect modal and returns false, so a drop or
+    // paste while signed out prompts sign-in instead of jumping to the upload-folder picker.
+    private readonly promptConnectIfNeeded: () => boolean,
   ) {}
 
   /**
@@ -260,6 +263,11 @@ export class DropController {
     sourcePath: string,
     sourceFile: MarkdownFileInfo["file"],
   ): Promise<void> {
+    // Not signed in yet: prompt to connect (same modal as the panel/commands) rather than inserting a
+    // placeholder and opening the upload-folder picker on an account that can't upload.
+    if (!this.promptConnectIfNeeded()) {
+      return;
+    }
     const placeholders = files.map((file) => makeUploadPlaceholder(file.name));
     const placeholderText = placeholders.join("\n");
     editor.replaceRange(placeholderText, dropPosition);
