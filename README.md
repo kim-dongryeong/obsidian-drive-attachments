@@ -98,12 +98,29 @@ This plugin connects your Obsidian **straight to your own Google Drive** — the
 
 You’ll create a free personal Google app — think of it as a private key that connects Obsidian straight to your Drive, so your files never pass through anyone else’s server. It’s a one-time setup, 6 short steps:
 
-1. **Create a Google Cloud project** — in the [Google Cloud Console](https://console.cloud.google.com/).
-2. **Enable the Google Drive API** — search for it in your project and turn it on.
-3. **Set up the OAuth consent screen** — under **Google Auth Platform → Audience**. Pick **External** if you use an @gmail.com account, or **Internal** if you have a Google Workspace organization.
-4. **Publish the app** *(External only)* — still under **Audience**, click **Publish app** (one click, so Google doesn’t sign you out every 7 days). *(Internal? Skip this.)*
-5. **Create an OAuth client & download JSON** — make an **OAuth client ID** of type **Desktop app**, then click **Download JSON**. That one file is your key.
-6. **Import the JSON in the plugin** — in the plugin’s settings, click **Select .json file** (or **Paste JSON** if someone sent you the contents). The Google sign-in opens by itself — approve it, and you’re connected.
+**1. Create a Google Cloud project**
+
+In the [Google Cloud Console](https://console.cloud.google.com/).
+
+**2. Enable the Google Drive API**
+
+Search for it in your project and turn it on.
+
+**3. Set up the OAuth consent screen**
+
+Under **Google Auth Platform → Audience**. Pick **External** if you use an @gmail.com account, or **Internal** if you have a Google Workspace organization.
+
+**4. Publish the app** *(External only)*
+
+Still under **Audience**, click **Publish app** (one click, so Google doesn’t sign you out every 7 days). *(Internal? Skip this.)*
+
+**5. Create an OAuth client & download JSON**
+
+Make an **OAuth client ID** of type **Desktop app**, then click **Download JSON**. That one file is your key.
+
+**6. Import the JSON in the plugin**
+
+In the plugin’s settings, click **Select .json file** (or **Paste JSON**). The Google sign-in opens by itself — approve it, and you’re connected.
 
 </details>
 
