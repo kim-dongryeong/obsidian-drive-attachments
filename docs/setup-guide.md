@@ -5,22 +5,21 @@ A screenshot walkthrough of the one-time Google Cloud setup for Drive Attachment
 ## 1. Create a Google Cloud project
 
 ![New Project screen — name the project and click Create](media/setup/01-create-project.png)
-![Project dashboard confirms the new project is active](media/setup/02-project-dashboard.png)
 
 ## 2. Enable the Google Drive API
 
+![Project dashboard — your new project is active; open the API Library next](media/setup/02-project-dashboard.png)
 ![Search the API Library for "Google Drive API"](media/setup/03-search-drive-api.png)
 ![Google Drive API page — click Enable](media/setup/04-enable-drive-api.png)
-![API enabled — service details/metrics page](media/setup/05-drive-api-enabled.png)
 
 ## 3. Configure the OAuth consent screen
 
+![Google Drive API enabled — now open the OAuth consent screen](media/setup/05-drive-api-enabled.png)
 ![Google Auth Platform not configured yet — click Get started](media/setup/06-auth-platform-get-started.png)
 ![App information — app name and support email](media/setup/07-consent-app-info.png)
 ![Audience — choose Internal or External user type](media/setup/08-consent-audience-type.png)
 ![Contact information — your email address](media/setup/09-consent-contact-info.png)
 ![Finish — agree to the API Services User Data Policy](media/setup/10-consent-finish.png)
-![OAuth configuration created](media/setup/11-oauth-configured.png)
 
 ## 4. Publish the app (External user type only)
 
@@ -29,9 +28,9 @@ A screenshot walkthrough of the one-time Google Cloud setup for Drive Attachment
 
 ## 5. Create an OAuth client and download the JSON
 
+![OAuth configuration created — now create an OAuth client](media/setup/11-oauth-configured.png)
 ![Create OAuth client ID — select Desktop app](media/setup/14-create-oauth-client-desktop.png)
 ![OAuth client created — click Download JSON](media/setup/15-oauth-client-created-json.png)
-![Clients list shows the new Desktop client](media/setup/16-clients-list.png)
 
 ## 6. Import the JSON in the plugin
 
@@ -45,6 +44,7 @@ A screenshot walkthrough of the one-time Google Cloud setup for Drive Attachment
 
 Only needed if you want Google's own file-picker popup; everything else works without it.
 
+![Clients/Credentials list — go to Create credentials → API key](media/setup/16-clients-list.png)
 ![Credentials page — Create credentials → API key](media/setup/22-create-credentials-api-key.png)
 ![Create API key — restrict it to the Google Picker API](media/setup/23-create-picker-api-key.png)
 ![API key created — paste it into Drive Attachments' settings](media/setup/24-picker-api-key-created.png)
