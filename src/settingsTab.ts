@@ -254,7 +254,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
       .setDesc(
         "Off by default — the plugin can only delete files it uploaded itself. Turn this on to also " +
           "delete files it didn’t upload; this gives the plugin read/write/delete over your entire " +
-          "Drive. Turning it on asks you to sign in to Google again; turning it off does not.",
+          "Drive. Changing this asks you to sign in to Google again so the new permission takes effect immediately.",
       )
       .addToggle((toggle) => {
         toggle
@@ -262,17 +262,12 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.enableFullDriveAccess = value;
             await this.plugin.saveSettings();
-            if (!value) {
-              // Turning it off never needs a fresh Google sign-in — just stop asking for the scope.
-              this.display();
-              return;
-            }
             if (this.plugin.auth.isConnected) {
-              // The scope change only takes effect after a fresh consent — do it automatically.
-              await this.connectWithStatus("Applying full Drive access");
-              if (!this.plugin.auth.hasFullDriveScope) {
-                // Grant was cancelled or failed — revert so the toggle reflects reality.
-                this.plugin.settings.enableFullDriveAccess = false;
+              await this.connectWithStatus(value ? "Applying full Drive access" : "Reducing to standard access");
+              // Sync the toggle to what Google actually granted — a cancelled/failed consent leaves the old
+              // scope in place, so reflect reality (revert ON if not granted, revert OFF if still full).
+              if (this.plugin.settings.enableFullDriveAccess !== this.plugin.auth.hasFullDriveScope) {
+                this.plugin.settings.enableFullDriveAccess = this.plugin.auth.hasFullDriveScope;
                 await this.plugin.saveSettings();
                 this.display();
               }
@@ -303,6 +298,11 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
             });
         });
     }
+
+    containerEl.createEl("div", {
+      cls: "gdab-build-line",
+      text: `Version ${this.plugin.manifest.version} · build ${__BUILD_ID__}`,
+    });
 
     new Setting(containerEl).setName("Google Picker (optional)").setHeading();
 

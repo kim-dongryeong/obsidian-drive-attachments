@@ -1,6 +1,6 @@
 {
   "name": "drive-attachments",
-  "version": "0.74.0",
+  "version": "0.74.1",
   "description": "Search Google Drive and insert durable Drive-link notes, and upload dropped files to Drive instead of the vault — with content-hash dedup.",
   "main": "main.js",
   "scripts": {

@@ -3950,3 +3950,11 @@
   justify-content: flex-end;
   margin-top: 12px;
 }
+
+/* Build identity line in settings, for confirming which build a symlinked dev vault has loaded. */
+.gdab-build-line {
+  margin-top: 18px;
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: right;
+}
