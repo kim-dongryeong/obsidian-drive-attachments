@@ -25,6 +25,7 @@ export class DriveLightboxModal extends Modal {
     app: App,
     private readonly preview: DrivePreviewService,
     private readonly item: { id: string; name: string },
+    private readonly onCloseCallback?: () => void,
   ) {
     super(app);
   }
@@ -145,6 +146,7 @@ export class DriveLightboxModal extends Modal {
 
   onClose(): void {
     this.contentEl.empty();
+    this.onCloseCallback?.();
   }
 }
 

@@ -65,9 +65,7 @@ export class DriveTrashService {
     }
     if (status === 403) {
       throw new DriveScopeError(
-        "With the default access, this plugin can only delete files it uploaded itself. To delete a " +
-          "file you picked or searched from your existing Drive, enable “Full Drive access” in this " +
-          "plugin's settings and reconnect (and allow the scope on your Google Cloud consent screen).",
+        "Turn on Full Drive access in settings to delete files you didn't upload with this plugin.",
       );
     }
     if (status === 404) {

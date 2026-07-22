@@ -116,6 +116,14 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
         new Notice("Connect cancelled — nothing changed.");
       } else {
         new Notice(`❌ ${busyLabel} didn't finish: ${message}. Nothing changed — try again.`, 8000);
+        if (!this.plugin.auth.isConnected) {
+          // Bad/invalid credentials on a first-ever connect: clear them so the tab falls back to the
+          // Select-.json/Paste-JSON import state instead of re-showing a broken "Connect" button.
+          this.plugin.settings.clientId = "";
+          this.plugin.settings.clientSecret = "";
+          this.plugin.settings.accountEmail = null;
+          await this.plugin.saveSettings();
+        }
       }
     } finally {
       if (timer !== undefined) {
@@ -185,7 +193,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
     if (this.plugin.auth.isConnected) {
       new Setting(containerEl)
         .setName("Status")
-        .setDesc(`Connected as ${this.plugin.settings.accountEmail ?? "unknown"}.`)
+        .setDesc(`✅ Connected as ${this.plugin.settings.accountEmail ?? "unknown"}.`)
         .addButton((button) => {
           button
             .setButtonText("Switch account")
@@ -246,7 +254,7 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
       .setDesc(
         "Off by default — the plugin can only delete files it uploaded itself. Turn this on to also " +
           "delete files it didn’t upload; this gives the plugin read/write/delete over your entire " +
-          "Drive. Changing this asks you to sign in to Google again.",
+          "Drive. Turning it on asks you to sign in to Google again; turning it off does not.",
       )
       .addToggle((toggle) => {
         toggle
@@ -254,9 +262,20 @@ export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.enableFullDriveAccess = value;
             await this.plugin.saveSettings();
+            if (!value) {
+              // Turning it off never needs a fresh Google sign-in — just stop asking for the scope.
+              this.display();
+              return;
+            }
             if (this.plugin.auth.isConnected) {
               // The scope change only takes effect after a fresh consent — do it automatically.
-              await this.connectWithStatus(value ? "Applying full Drive access" : "Applying standard access");
+              await this.connectWithStatus("Applying full Drive access");
+              if (!this.plugin.auth.hasFullDriveScope) {
+                // Grant was cancelled or failed — revert so the toggle reflects reality.
+                this.plugin.settings.enableFullDriveAccess = false;
+                await this.plugin.saveSettings();
+                this.display();
+              }
             } else {
               this.display();
             }

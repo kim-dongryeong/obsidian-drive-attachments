@@ -24,6 +24,9 @@ export interface DriveRowActionContext {
   // captured when their command ran. Returns null when no markdown editor is available, so each
   // action surfaces its own "Open a note" Notice instead of throwing.
   resolveEditor: () => { editor: Editor; file: TFile | null } | null;
+  // Called when the quick-preview lightbox closes (including via Esc) so the caller can restore
+  // keyboard focus — otherwise Esc leaves focus nowhere and breaks arrow-key row navigation.
+  onPreviewClose?: () => void;
 }
 
 // The shared per-row action menu. Files and folders both get open-in-browser, insert-link,
@@ -179,7 +182,7 @@ export function embedDriveItemPreview(item: DriveActionItem, context: DriveRowAc
 }
 
 export function openDriveItemPreview(item: DriveActionItem, context: DriveRowActionContext): void {
-  new DriveLightboxModal(context.app, context.preview, item).open();
+  new DriveLightboxModal(context.app, context.preview, item, context.onPreviewClose).open();
 }
 
 function toPickerItem(item: DriveActionItem): DrivePickerItem | null {

@@ -150,7 +150,13 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
           () => this.settings,
           () => this.saveSettings(),
           async () => {
+            if (!this.settings.clientId || !this.settings.clientSecret) {
+              if (!(await this.importCredentialsJson())) {
+                return;
+              }
+            }
             const email = await this.auth.connect();
+            this.refreshDrivePanelAvailability();
             new Notice(`Connected to Google Drive as ${email}.`);
           },
           () => this.openSettingsTab(),

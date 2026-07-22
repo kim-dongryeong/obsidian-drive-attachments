@@ -830,14 +830,19 @@ export class DrivePanelView extends ItemView {
       return;
     }
 
-    empty.createDiv({ cls: "gdab-drive-panel-state-title", text: "Connect Google Drive with read access." });
+    empty.createDiv({ cls: "gdab-drive-panel-state-title", text: "Connect Google Drive" });
     empty.createDiv({
       cls: "gdab-drive-panel-state-detail",
       text: this.auth.isConnected
         ? "Reconnect to grant Drive read access for browsing."
-        : "Connect Google Drive before browsing files and folders.",
+        : "Sign in to browse your Drive here.",
     });
-    empty.createEl("button", { text: this.auth.isConnected ? "Reconnect" : "Connect" }).addEventListener("click", () => {
+    const buttonLabel = this.auth.isConnected
+      ? "Reconnect"
+      : settings.clientId && settings.clientSecret
+        ? "Connect"
+        : "Select .json file";
+    empty.createEl("button", { text: buttonLabel }).addEventListener("click", () => {
       this.connect()
         .then(() => {
           void this.data.loadRoots(true);
@@ -1995,8 +2000,8 @@ export class DrivePanelView extends ItemView {
   }
 
   // Keyboard delete: move the current selection to Drive's trash (or permanently delete when the
-  // Trash view is open), reusing the same confirmation + scope guard as the row menu. The scope guard
-  // (ensureCanModifyDrive) surfaces the right message when Full Drive access is off or not yet granted.
+  // Trash view is open), reusing the same confirmation + connection guard as the row menu. The guard
+  // (ensureConnected) surfaces a message when Drive isn't connected; the Drive API enforces scope.
   private trashSelectionFromKeyboard(): void {
     const selected = this.getCurrentItems().filter((item) => this.selectedItemIds.has(item.id));
     if (selected.length === 0) {
@@ -2207,9 +2212,9 @@ export class DrivePanelView extends ItemView {
 
     // Grouped to mirror drive.google.com's right-click menu order (Obsidian 1.5 has no public
     // submenu API, so Drive's "Share ▸"/"Organize ▸" submenus are flattened into separator-
-    // delimited groups). Every Drive-write action is gated by canModifyDrive() at click time;
-    // Rename targets only the clicked row, the rest target the whole selection when the clicked
-    // row is part of a multi-selection (Finder-like).
+    // delimited groups). Every Drive-write action is gated by ensureConnected() at click time;
+    // the Drive API enforces scope server-side. Rename targets only the clicked row, the rest
+    // target the whole selection when the clicked row is part of a multi-selection (Finder-like).
     const allFiles = targets.every((target) => target.mimeType !== DRIVE_FOLDER_MIME_TYPE);
     const removeFromStarred = targets.every((target) => target.starred === true);
 
@@ -2428,7 +2433,7 @@ export class DrivePanelView extends ItemView {
       new Notice(`Open a Drive folder before creating a folder. ${this.currentVirtualRootName()} is a collection.`);
       return;
     }
-    if (!this.ensureCanModifyDrive()) {
+    if (!this.ensureConnected()) {
       return;
     }
 
@@ -2490,7 +2495,7 @@ export class DrivePanelView extends ItemView {
   }
 
   private async createFolderInCurrentLocation(name: string): Promise<void> {
-    if (!this.ensureCanModifyDrive()) {
+    if (!this.ensureConnected()) {
       return;
     }
 
@@ -2511,38 +2516,11 @@ export class DrivePanelView extends ItemView {
     }
   }
 
-  private canModifyDrive(): boolean {
-    return this.auth.isConnected && this.getSettings().enableFullDriveAccess && this.auth.hasFullDriveScope;
-  }
-
-  private ensureCanModifyDrive(): boolean {
-    if (this.canModifyDrive()) {
+  private ensureConnected(): boolean {
+    if (this.auth.isConnected) {
       return true;
     }
-
-    if (!this.auth.isConnected) {
-      new Notice("Connect Google Drive first to delete or modify files.", 8000);
-      return false;
-    }
-
-    if (!this.getSettings().enableFullDriveAccess) {
-      // Opt-in is off: the default drive.file scope can't touch files the plugin didn't upload.
-      new Notice(
-        "To delete or modify Drive files, turn on “Full Drive access” in the Drive Attachments " +
-          "settings, then reconnect (Disconnect → Connect).",
-        10_000,
-      );
-      return false;
-    }
-
-    // Opted in, but Google never actually granted the full-Drive scope — the user most likely hasn't
-    // added it on their consent screen yet, or hasn't reconnected since. Point them at the exact fix.
-    new Notice(
-      "“Full Drive access” is on, but Google hasn't granted the full-Drive scope yet. Add the " +
-        "https://www.googleapis.com/auth/drive scope in the Google Cloud console (Google Auth " +
-        "Platform → Data Access), then Disconnect and Connect again in settings.",
-      12_000,
-    );
+    new Notice("Connect Google Drive first.", 6000);
     return false;
   }
 
@@ -2562,7 +2540,7 @@ export class DrivePanelView extends ItemView {
     if (items.length === 0) {
       return;
     }
-    if (!this.ensureCanModifyDrive()) {
+    if (!this.ensureConnected()) {
       return;
     }
     if (this.isCurrentVirtualRoot()) {
@@ -2596,7 +2574,7 @@ export class DrivePanelView extends ItemView {
       new Notice("Google Drive folder copying is not supported from this panel yet.");
       return;
     }
-    if (!this.ensureCanModifyDrive()) {
+    if (!this.ensureConnected()) {
       return;
     }
 
@@ -2629,7 +2607,7 @@ export class DrivePanelView extends ItemView {
   }
 
   private openRenameModal(item: DriveBrowserItem): void {
-    if (!this.ensureCanModifyDrive()) {
+    if (!this.ensureConnected()) {
       return;
     }
     const isFolder = item.mimeType === DRIVE_FOLDER_MIME_TYPE;
@@ -2639,7 +2617,7 @@ export class DrivePanelView extends ItemView {
   }
 
   private openFolderColorPicker(item: DriveBrowserItem): void {
-    if (item.mimeType !== DRIVE_FOLDER_MIME_TYPE || !this.ensureCanModifyDrive()) {
+    if (item.mimeType !== DRIVE_FOLDER_MIME_TYPE || !this.ensureConnected()) {
       return;
     }
 
@@ -2649,7 +2627,7 @@ export class DrivePanelView extends ItemView {
   }
 
   private async setFolderColor(item: DriveBrowserItem, color: string | null): Promise<void> {
-    if (!this.ensureCanModifyDrive() || !this.beginPanelWrite()) {
+    if (!this.ensureConnected() || !this.beginPanelWrite()) {
       return;
     }
 
@@ -2677,7 +2655,7 @@ export class DrivePanelView extends ItemView {
   }
 
   private async setItemsStarred(items: DriveBrowserItem[], starred: boolean): Promise<void> {
-    if (items.length === 0 || !this.ensureCanModifyDrive() || !this.beginPanelWrite()) {
+    if (items.length === 0 || !this.ensureConnected() || !this.beginPanelWrite()) {
       return;
     }
 
@@ -2727,7 +2705,7 @@ export class DrivePanelView extends ItemView {
   }
 
   private async renameItem(item: DriveBrowserItem, name: string): Promise<void> {
-    if (!this.ensureCanModifyDrive()) {
+    if (!this.ensureConnected()) {
       return;
     }
     const trimmed = name.trim();
@@ -2760,7 +2738,7 @@ export class DrivePanelView extends ItemView {
     source: DrivePanelLocation,
     target: DrivePanelLocation,
   ): Promise<void> {
-    if (!this.ensureCanModifyDrive()) {
+    if (!this.ensureConnected()) {
       return;
     }
     if (source.id === target.id) {
@@ -2809,7 +2787,7 @@ export class DrivePanelView extends ItemView {
   }
 
   private async copyItems(items: DriveBrowserItem[], target: DrivePanelLocation): Promise<void> {
-    if (!this.ensureCanModifyDrive()) {
+    if (!this.ensureConnected()) {
       return;
     }
     if (!this.beginPanelWrite()) {
@@ -2859,7 +2837,7 @@ export class DrivePanelView extends ItemView {
       return;
     }
     if (!this.canBrowse()) {
-      new Notice("Connect Google Drive with read access before downloading files.");
+      new Notice("Connect Google Drive first to download files.");
       return;
     }
 
@@ -2908,7 +2886,7 @@ export class DrivePanelView extends ItemView {
     if (items.length === 0) {
       return;
     }
-    if (!this.ensureCanModifyDrive()) {
+    if (!this.ensureConnected()) {
       return;
     }
     new PanelDeleteConfirmModal(this.app, items, () => {
@@ -2917,7 +2895,7 @@ export class DrivePanelView extends ItemView {
   }
 
   private async trashItems(items: DriveBrowserItem[]): Promise<void> {
-    if (!this.ensureCanModifyDrive()) {
+    if (!this.ensureConnected()) {
       return;
     }
     if (!this.beginPanelWrite()) {
@@ -3254,7 +3232,7 @@ export class DrivePanelView extends ItemView {
     if (items.length === 0) {
       return;
     }
-    if (!this.ensureCanModifyDrive()) {
+    if (!this.ensureConnected()) {
       return;
     }
     if (!this.beginPanelWrite()) {
@@ -3290,7 +3268,7 @@ export class DrivePanelView extends ItemView {
   }
 
   private confirmDeleteForever(items: DriveBrowserItem[]): void {
-    if (items.length === 0 || !this.ensureCanModifyDrive()) {
+    if (items.length === 0 || !this.ensureConnected()) {
       return;
     }
     new PanelPermanentDeleteConfirmModal(this.app, items, () => {
@@ -3299,7 +3277,7 @@ export class DrivePanelView extends ItemView {
   }
 
   private async deleteForeverItems(items: DriveBrowserItem[]): Promise<void> {
-    if (!this.ensureCanModifyDrive() || !this.beginPanelWrite()) {
+    if (!this.ensureConnected() || !this.beginPanelWrite()) {
       return;
     }
 
@@ -4230,6 +4208,7 @@ export class DrivePanelView extends ItemView {
       insert: this.insert,
       preview: this.preview,
       resolveEditor: () => this.getActiveMarkdownEditor(),
+      onPreviewClose: () => this.listEl?.focus(),
     };
   }
 

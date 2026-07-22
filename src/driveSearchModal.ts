@@ -115,8 +115,10 @@ export class DriveSearchModal extends FuzzySuggestModal<DriveIndexItem> {
       this.emptyStateText = this.auth.isConnected
         ? "Grant Drive read access in settings to use in-Obsidian search."
         : "Connect Google Drive in settings to use in-Obsidian search.";
+      this.inputEl.disabled = true;
       return [];
     }
+    this.inputEl.disabled = false;
 
     const state = this.index.getState();
     const progress = this.index.getProgress();

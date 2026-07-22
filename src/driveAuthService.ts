@@ -262,10 +262,8 @@ export class DriveAuthService {
         authUrl.searchParams.set("code_challenge_method", "S256");
         const authUrlString = authUrl.toString();
         window.open(authUrlString);
-        new Notice(
-          `Opened Google Drive authorization in your browser. If it opened the wrong profile, paste this URL into the browser signed in to Drive: ${authUrlString}`,
-          15000,
-        );
+        console.debug("Drive authorization URL:", authUrlString);
+        new Notice("🚀 Opened Google Drive authorization in your browser.");
       });
 
       timeoutId = window.setTimeout(() => {

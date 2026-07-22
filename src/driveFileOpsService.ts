@@ -213,9 +213,7 @@ function assertDriveWriteOk(response: RequestUrlResponse, operation: DriveWriteO
   }
 
   if (response.status === 403) {
-    throw new Error(
-      "Enable Full Drive access in settings, then reconnect, to modify Drive files you did not create with this plugin.",
-    );
+    throw new Error("Turn on Full Drive access in settings to modify files you didn't upload with this plugin.");
   }
 
   if (response.status === 404) {
