@@ -1,6 +1,6 @@
 import { debounce, EventRef, MarkdownView, Notice, Plugin, TFile } from "obsidian";
 import { DriveAuthService } from "./driveAuthService";
-import { ConnectModal } from "./connectModal";
+import { ConnectModal, renderConnectControls } from "./connectModal";
 import { CustomIconPackService } from "./customIconPack";
 import { askDriveDedupAction } from "./driveDedupModal";
 import { computeMd5HexFromSource, DriveDedupHit, DriveDedupService } from "./driveDedupService";
@@ -156,6 +156,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
           () => this.openSettingsTab(),
           this.panelDragModifiers,
           (mimeType, name) => this.customIconPack.customIconImgSrc(mimeType, name),
+          (container, onConnected) => renderConnectControls(container, this, onConnected),
         ),
     );
     this.addRibbonIcon("hard-drive", "Open Drive panel", () => {

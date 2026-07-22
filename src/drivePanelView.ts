@@ -235,6 +235,7 @@ export class DrivePanelView extends ItemView {
     private readonly openSettings: () => void,
     private readonly panelDragModifiers: PanelDragModifierTracker,
     private readonly customIconSrc?: CustomFileIconResolver,
+    private readonly renderConnectControls?: (container: HTMLElement, onConnected: () => void) => void,
   ) {
     super(leaf);
     this.fileOps = new DriveFileOpsService(auth);
@@ -837,21 +838,8 @@ export class DrivePanelView extends ItemView {
         ? "Reconnect to grant Drive read access for browsing."
         : "Sign in to browse your Drive here.",
     });
-    const buttonLabel = this.auth.isConnected
-      ? "Reconnect"
-      : settings.clientId && settings.clientSecret
-        ? "Connect"
-        : "Select .json file";
-    empty.createEl("button", { text: buttonLabel }).addEventListener("click", () => {
-      this.connect()
-        .then(() => {
-          void this.data.loadRoots(true);
-          return this.data.loadCurrentFolder(true);
-        })
-        .catch((error) => {
-          new Notice(`Google Drive connection failed: ${error instanceof Error ? error.message : String(error)}`);
-          this.render();
-        });
+    this.renderConnectControls?.(empty, () => {
+      void this.data.loadRoots(true).then(() => this.data.loadCurrentFolder(true));
     });
   }
 

@@ -43,6 +43,52 @@ export class PasteJsonCredentialsModal extends Modal {
   }
 }
 
+// Shared connect controls: the buttons (Connect, or Select .json file + Paste JSON) plus the setup-guide
+// link. Used by ConnectModal and by the Drive panel's not-connected empty state, so both surfaces offer
+// the same paths to get connected instead of the panel having a single bare button.
+export function renderConnectControls(
+  container: HTMLElement,
+  plugin: GoogleDriveAttachmentBridgePlugin,
+  onConnected?: () => void,
+): void {
+  const buttons = container.createDiv({ cls: "gdab-connect-modal-buttons" });
+  const hasCredentials = Boolean(plugin.settings.clientId && plugin.settings.clientSecret);
+
+  if (hasCredentials) {
+    buttons.createEl("button", { text: "Connect", cls: "mod-cta" }).addEventListener("click", () => {
+      void (async () => {
+        await plugin.connectAndNotify();
+        onConnected?.();
+      })();
+    });
+  } else {
+    buttons.createEl("button", { text: "Select .json file", cls: "mod-cta" }).addEventListener("click", () => {
+      void (async () => {
+        if (await plugin.importCredentialsJson()) {
+          await plugin.connectAndNotify();
+          onConnected?.();
+        }
+      })();
+    });
+    buttons.createEl("button", { text: "Paste JSON" }).addEventListener("click", () => {
+      new PasteJsonCredentialsModal(plugin.app, async (raw) => {
+        if (await plugin.applyCredentialsJson(raw)) {
+          await plugin.connectAndNotify();
+          onConnected?.();
+        }
+      }).open();
+    });
+  }
+
+  const hint = container.createEl("p", { cls: "setting-item-description" });
+  hint.appendText("New to this? ");
+  hint.createEl("a", {
+    text: "See the setup guide",
+    href: "https://github.com/kim-dongryeong/obsidian-drive-attachments#setup",
+    attr: { target: "_blank", rel: "noopener" },
+  });
+}
+
 // Same connect prompt as the settings tab's first-run option, shown wherever a Drive-requiring command
 // is invoked while not connected — instead of failing with a raw error, opening a Finder dialog, or
 // opening an unrelated flow.
@@ -62,40 +108,7 @@ export class ConnectModal extends Modal {
         "and then the Google sign-in opens automatically.",
     });
 
-    const buttons = contentEl.createDiv({ cls: "gdab-connect-modal-buttons" });
-    const hasCredentials = Boolean(this.plugin.settings.clientId && this.plugin.settings.clientSecret);
-
-    if (hasCredentials) {
-      buttons.createEl("button", { text: "Connect", cls: "mod-cta" }).addEventListener("click", () => {
-        this.close();
-        void this.plugin.connectAndNotify();
-      });
-    } else {
-      buttons.createEl("button", { text: "Select .json file", cls: "mod-cta" }).addEventListener("click", () => {
-        void (async () => {
-          if (await this.plugin.importCredentialsJson()) {
-            this.close();
-            await this.plugin.connectAndNotify();
-          }
-        })();
-      });
-      buttons.createEl("button", { text: "Paste JSON" }).addEventListener("click", () => {
-        new PasteJsonCredentialsModal(this.app, async (raw) => {
-          if (await this.plugin.applyCredentialsJson(raw)) {
-            this.close();
-            await this.plugin.connectAndNotify();
-          }
-        }).open();
-      });
-    }
-
-    const hint = contentEl.createEl("p", { cls: "setting-item-description" });
-    hint.appendText("New to this? ");
-    hint.createEl("a", {
-      text: "See the setup guide",
-      href: "https://github.com/kim-dongryeong/obsidian-drive-attachments#setup",
-      attr: { target: "_blank", rel: "noopener" },
-    });
+    renderConnectControls(contentEl, this.plugin, () => this.close());
   }
 
   onClose(): void {
