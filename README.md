@@ -90,6 +90,7 @@ This plugin connects your Obsidian **straight to your own Google Drive** — the
 
 ---
 
+<a id="setup"></a>
 <details>
 <summary><b>⚙️ One-time setup — connect your Google Drive</b> (click to expand)</summary>
 

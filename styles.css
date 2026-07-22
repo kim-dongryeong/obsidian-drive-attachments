@@ -16,6 +16,13 @@
   margin-top: 4px;
 }
 
+.gdab-connect-modal-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
 .gdab-drive-search-result {
   display: flex;
   align-items: flex-start;

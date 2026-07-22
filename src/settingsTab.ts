@@ -1,4 +1,5 @@
-import { App, debounce, Modal, Notice, PluginSettingTab, Setting } from "obsidian";
+import { App, debounce, Notice, PluginSettingTab, Setting } from "obsidian";
+import { PasteJsonCredentialsModal } from "./connectModal";
 import { PanelFolderPickerModal } from "./drivePanelModals";
 import { MY_DRIVE_ROOT, type DrivePanelLocation } from "./drivePanelLocation";
 import {
@@ -22,48 +23,6 @@ import GoogleDriveAttachmentBridgePlugin from "./main";
 // Hard cap on an automatic re-consent so a stalled token exchange can't lock the settings tab forever.
 // connect()'s own 120s timeout only covers the browser/loopback step, not the later token/email calls.
 const RECONNECT_TIMEOUT_MS = 150_000;
-
-// Paste-the-JSON alternative to the file picker: someone who was messaged the OAuth-client JSON can
-// paste its contents directly, no file to save/locate. onSubmit gets the raw text (trimmed non-empty).
-class PasteJsonCredentialsModal extends Modal {
-  private raw = "";
-
-  constructor(app: App, private readonly onSubmit: (raw: string) => void | Promise<void>) {
-    super(app);
-  }
-
-  onOpen(): void {
-    const { contentEl } = this;
-    contentEl.createEl("h3", { text: "Paste Google credentials JSON" });
-    contentEl.createEl("p", {
-      text:
-        "Paste the full contents of the OAuth client JSON you downloaded from Google Cloud (or that " +
-        "someone shared with you). It's kept only in this vault — nothing is uploaded.",
-    });
-    const textarea = contentEl.createEl("textarea", { cls: "gdab-paste-json" });
-    textarea.rows = 10;
-    textarea.placeholder = '{ "installed": { "client_id": "…", "client_secret": "…" } }';
-    textarea.addEventListener("input", () => {
-      this.raw = textarea.value;
-    });
-    const buttons = contentEl.createDiv({ cls: "gdab-paste-json-buttons" });
-    buttons.createEl("button", { text: "Import & connect", cls: "mod-cta" }).addEventListener("click", () => {
-      const value = this.raw.trim();
-      if (!value) {
-        new Notice("Paste the JSON first.");
-        return;
-      }
-      this.close();
-      void this.onSubmit(value);
-    });
-    buttons.createEl("button", { text: "Cancel" }).addEventListener("click", () => this.close());
-    textarea.focus();
-  }
-
-  onClose(): void {
-    this.contentEl.empty();
-  }
-}
 
 export class GoogleDriveAttachmentBridgeSettingTab extends PluginSettingTab {
   private readonly uploadFolderPathCache = new Map<string, string>();

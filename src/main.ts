@@ -1,5 +1,6 @@
 import { debounce, EventRef, MarkdownView, Notice, Plugin, TFile } from "obsidian";
 import { DriveAuthService } from "./driveAuthService";
+import { ConnectModal } from "./connectModal";
 import { CustomIconPackService } from "./customIconPack";
 import { askDriveDedupAction } from "./driveDedupModal";
 import { computeMd5HexFromSource, DriveDedupHit, DriveDedupService } from "./driveDedupService";
@@ -150,14 +151,7 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
           () => this.settings,
           () => this.saveSettings(),
           async () => {
-            if (!this.settings.clientId || !this.settings.clientSecret) {
-              if (!(await this.importCredentialsJson())) {
-                return;
-              }
-            }
-            const email = await this.auth.connect();
-            this.refreshDrivePanelAvailability();
-            new Notice(`Connected to Google Drive as ${email}.`);
+            await this.connectAndNotify();
           },
           () => this.openSettingsTab(),
           this.panelDragModifiers,
@@ -290,6 +284,9 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
           return canRun;
         }
 
+        if (!this.promptConnectIfNeeded()) {
+          return true;
+        }
         openMigrateNoteAttachmentsPreview(this.app, this.dedup, this.upload, this.insert, this.settings, () => this.ensureDefaultUploadFolder());
         return true;
       },
@@ -299,6 +296,9 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
       id: "insert-drive-link-at-cursor",
       name: "Open Drive picker and insert preview",
       editorCallback: async (editor) => {
+        if (!this.promptConnectIfNeeded()) {
+          return;
+        }
         try {
           await this.insert.pickAndInsertPreviewAtCursor(editor, this.app.workspace.getActiveFile());
         } catch (error) {
@@ -311,6 +311,9 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
       id: "search-drive-and-insert-link",
       name: "Search Google Drive and insert preview",
       editorCallback: (editor) => {
+        if (!this.promptConnectIfNeeded()) {
+          return;
+        }
         new DriveSearchModal(
           this.app,
           editor,
@@ -330,6 +333,9 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
       id: "refresh-drive-index",
       name: "Refresh Drive index",
       callback: async () => {
+        if (!this.promptConnectIfNeeded()) {
+          return;
+        }
         try {
           if (!this.settings.enableDriveSearch) {
             new Notice("Enable in-Obsidian Drive search in settings.");
@@ -360,6 +366,9 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
       id: "upload-local-file-to-drive",
       name: "Upload local file to Drive and insert preview",
       editorCallback: async (editor) => {
+        if (!this.promptConnectIfNeeded()) {
+          return;
+        }
         try {
           const sourceFile = this.app.workspace.getActiveFile();
           const file = await chooseLocalFile();
@@ -443,6 +452,9 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
           return canRun;
         }
 
+        if (!this.promptConnectIfNeeded()) {
+          return true;
+        }
         this.insert.refreshDriveMetadata(file).catch((error) => {
           new Notice(`Refresh Drive metadata failed: ${error instanceof Error ? error.message : String(error)}`);
         });
@@ -466,6 +478,9 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
         if (!(file instanceof TFile)) {
           return false;
         }
+        if (!this.promptConnectIfNeeded()) {
+          return true;
+        }
         void this.noteActions.deleteDriveFile(file, driveId);
         return true;
       },
@@ -484,6 +499,9 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
           return true;
         }
 
+        if (!this.promptConnectIfNeeded()) {
+          return true;
+        }
         void this.noteActions.openContainingFolder(driveId);
         return true;
       },
@@ -516,6 +534,34 @@ export default class GoogleDriveAttachmentBridgePlugin extends Plugin {
         }
       }),
     );
+  }
+
+  // Shared connect flow for the Drive panel's "Connect" button and ConnectModal: import credentials if
+  // none are stored yet, then run the OAuth connect and report the result via Notice.
+  async connectAndNotify(): Promise<void> {
+    if (!this.settings.clientId || !this.settings.clientSecret) {
+      if (!(await this.importCredentialsJson())) {
+        return;
+      }
+    }
+    try {
+      const email = await this.auth.connect();
+      this.refreshDrivePanelAvailability();
+      new Notice(`Connected to Google Drive as ${email}.`);
+    } catch (error) {
+      new Notice(`Google Drive connection failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  // Gate for every Drive-requiring command: when not connected, show the same connect prompt as the
+  // settings tab's first option instead of letting the command fail with a raw error (or, worse, open a
+  // Finder dialog / an unrelated flow). Returns true when already connected so the caller can proceed.
+  promptConnectIfNeeded(): boolean {
+    if (this.auth.isConnected) {
+      return true;
+    }
+    new ConnectModal(this.app, this).open();
+    return false;
   }
 
   // First upload forces the folder choice: when no default upload folder is set, open the folder
