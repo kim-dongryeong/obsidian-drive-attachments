@@ -2661,6 +2661,7 @@ export class DrivePanelView extends ItemView {
 
     let updated = 0;
     const failedNames: string[] = [];
+    let failureReason = "";
     const verb = starred ? "Adding" : "Removing";
     const destination = starred ? "to" : "from";
     const progress = new Notice(`${verb} 0/${items.length} ${destination} Starred...`, 0);
@@ -2675,6 +2676,7 @@ export class DrivePanelView extends ItemView {
           updated += 1;
         } catch (error) {
           failedNames.push(item.name);
+          failureReason = error instanceof Error ? error.message : String(error);
           console.warn("[Drive Attachments] Drive panel starred update failed.", error);
         }
       }
@@ -2688,7 +2690,11 @@ export class DrivePanelView extends ItemView {
       this.panelWriteInFlight = false;
     }
 
-    new Notice(formatStarredSummary(updated, failedNames, starred), failedNames.length > 0 ? 10_000 : 5_000);
+    const starredSummary = formatStarredSummary(updated, failedNames, starred);
+    new Notice(
+      failedNames.length > 0 && failureReason ? `${starredSummary} — ${failureReason}` : starredSummary,
+      failedNames.length > 0 ? 10_000 : 5_000,
+    );
   }
 
   private updateCachedStarred(fileId: string, starred: boolean): void {
@@ -2755,6 +2761,7 @@ export class DrivePanelView extends ItemView {
 
     let moved = 0;
     const failedNames: string[] = [];
+    let failureReason = "";
     const progress = new Notice(`Moving 0/${items.length} to ${target.name}...`, 0);
 
     try {
@@ -2767,6 +2774,7 @@ export class DrivePanelView extends ItemView {
           moved += 1;
         } catch (error) {
           failedNames.push(item.name);
+          failureReason = error instanceof Error ? error.message : String(error);
           console.warn("[Drive Attachments] Drive panel move failed.", error);
         }
       }
@@ -2783,7 +2791,11 @@ export class DrivePanelView extends ItemView {
       this.panelWriteInFlight = false;
     }
 
-    new Notice(formatMoveSummary(moved, failedNames, target.name), failedNames.length > 0 ? 10_000 : 5_000);
+    const moveSummary = formatMoveSummary(moved, failedNames, target.name);
+    new Notice(
+      failedNames.length > 0 && failureReason ? `${moveSummary} — ${failureReason}` : moveSummary,
+      failedNames.length > 0 ? 10_000 : 5_000,
+    );
   }
 
   private async copyItems(items: DriveBrowserItem[], target: DrivePanelLocation): Promise<void> {
@@ -2904,6 +2916,7 @@ export class DrivePanelView extends ItemView {
 
     let trashed = 0;
     const failedNames: string[] = [];
+    let failureReason = "";
     const progress = new Notice(`Moving 0/${items.length} to Drive trash...`, 0);
 
     try {
@@ -2916,6 +2929,7 @@ export class DrivePanelView extends ItemView {
           trashed += 1;
         } catch (error) {
           failedNames.push(item.name);
+          failureReason = error instanceof Error ? error.message : String(error);
           console.warn("[Drive Attachments] Drive panel trash failed.", error);
         }
       }
@@ -2925,7 +2939,11 @@ export class DrivePanelView extends ItemView {
       this.panelWriteInFlight = false;
     }
 
-    new Notice(formatTrashSummary(trashed, failedNames), failedNames.length > 0 ? 10_000 : 5_000);
+    const trashSummary = formatTrashSummary(trashed, failedNames);
+    new Notice(
+      failedNames.length > 0 && failureReason ? `${trashSummary} — ${failureReason}` : trashSummary,
+      failedNames.length > 0 ? 10_000 : 5_000,
+    );
   }
 
   // Claim the single panel-write slot; false (with a Notice) if another panel operation is mid-flight.
@@ -3283,6 +3301,7 @@ export class DrivePanelView extends ItemView {
 
     let deleted = 0;
     const failedNames: string[] = [];
+    let failureReason = "";
     const progress = new Notice(`Deleting 0/${items.length} forever from Drive...`, 0);
 
     try {
@@ -3295,6 +3314,7 @@ export class DrivePanelView extends ItemView {
           deleted += 1;
         } catch (error) {
           failedNames.push(item.name);
+          failureReason = error instanceof Error ? error.message : String(error);
           console.warn("[Drive Attachments] Drive panel permanent delete failed.", error);
         }
       }
@@ -3306,7 +3326,11 @@ export class DrivePanelView extends ItemView {
       this.panelWriteInFlight = false;
     }
 
-    new Notice(formatPermanentDeleteSummary(deleted, failedNames), failedNames.length > 0 ? 10_000 : 5_000);
+    const permanentDeleteSummary = formatPermanentDeleteSummary(deleted, failedNames);
+    new Notice(
+      failedNames.length > 0 && failureReason ? `${permanentDeleteSummary} — ${failureReason}` : permanentDeleteSummary,
+      failedNames.length > 0 ? 10_000 : 5_000,
+    );
   }
 
   private async copySelectedLinks(selected: DriveBrowserItem[]): Promise<void> {
