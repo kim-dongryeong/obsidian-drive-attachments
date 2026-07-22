@@ -3164,6 +3164,12 @@
   margin-bottom: 10px;
 }
 
+/* The connect controls are normally right-aligned inside a modal; the panel's empty state reads
+   left-to-right with the rest of its text, so keep the buttons flush left there instead. */
+.gdab-drive-panel-state .gdab-connect-modal-buttons {
+  justify-content: flex-start;
+}
+
 /* "Load more" row under the item list when Drive reports another page (200+ item folders). */
 .gdab-drive-panel-load-more {
   display: flex;
