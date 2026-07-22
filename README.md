@@ -96,15 +96,30 @@ This plugin connects your Obsidian **straight to your own Google Drive** — the
 
 <br>
 
-You’ll create a free personal Google app — think of it as a private key that connects Obsidian straight to your Drive. That’s exactly what keeps your files private: they never pass through anyone else’s server. Don’t worry about the technical terms below — each step tells you precisely what to click.
+You’ll create a free personal Google app — think of it as a private key that connects Obsidian straight to your Drive, so your files never pass through anyone else’s server. It’s a one-time setup, 6 short steps:
 
-1. In the [Google Cloud Console](https://console.cloud.google.com/), create a project and turn on the **Google Drive API**.
-2. Open the **OAuth consent screen** (under **Google Auth Platform → Audience**). Pick **Internal** if you have a Google Workspace organization, otherwise **External** — and for External, add your own Google account under **Test users**.
-3. Create an **OAuth client ID** of type **Desktop app**, then click **Download JSON** — that one file is your key.
-4. In the plugin’s settings, click **Select .json file** and pick the file you just downloaded (or use **Paste JSON** if someone sent you its contents). The Google sign-in opens by itself — approve it, and you’re connected.
-5. **Make it permanent (External apps only).** If you picked **External** above, your app starts in *Testing* mode, and Google signs you out every 7 days — the plugin’s **Connect** button signs you back in with one click. To stop that for good, go to **Google Auth Platform → Audience** and click **Publish app** (one click). It never expires again. *(Picked **Internal**? Skip this — Internal apps don’t expire.)*
+1. **Create a Google Cloud project** — in the [Google Cloud Console](https://console.cloud.google.com/).
+2. **Enable the Google Drive API** — search for it in your project and turn it on.
+3. **Set up the OAuth consent screen** — under **Google Auth Platform → Audience**. Pick **External** if you use an @gmail.com account, or **Internal** if you have a Google Workspace organization.
+4. **Publish the app** *(External only)* — still under **Audience**, click **Publish app** (one click, so Google doesn’t sign you out every 7 days). *(Internal? Skip this.)*
+5. **Create an OAuth client & download JSON** — make an **OAuth client ID** of type **Desktop app**, then click **Download JSON**. That one file is your key.
+6. **Import the JSON in the plugin** — in the plugin’s settings, click **Select .json file** (or **Paste JSON** if someone sent you the contents). The Google sign-in opens by itself — approve it, and you’re connected.
 
-> **Optional — Google’s own file-picker popup.** Everything above works without it: search and the sidebar already cover browsing. If you also want Google’s Picker window, turn on the **Google Picker API** in your project, create an **API key** (Credentials → Create credentials → API key), and paste it into the plugin’s Picker setting.
+</details>
+
+<details>
+<summary><b>Use Google’s own file-picker popup (optional)</b></summary>
+
+<br>
+
+Everything works without it — search and the sidebar already cover browsing. If you also want Google’s Picker window, turn on the **Google Picker API** in your project, create an **API key** (**Credentials → Create credentials → API key**), and paste it into the plugin’s Picker setting.
+
+</details>
+
+<details>
+<summary><b>Your data is safe</b></summary>
+
+<br>
 
 Your sign-in stays on your own computer — saved only inside your vault at `<vault>/.obsidian/plugins/drive-attachments/data.json`, and never sent anywhere else. It’s yours alone; the only thing to remember is not to share that one file (or sync it anywhere public).
 
