@@ -96,6 +96,8 @@ This plugin connects your Obsidian **straight to your own Google Drive** — the
 
 <br>
 
+**📸 Prefer screenshots? See the [illustrated setup guide](docs/setup-guide.md).**
+
 You’ll create a free personal Google app — think of it as a private key that connects Obsidian straight to your Drive, so your files never pass through anyone else’s server. It’s a one-time setup, 6 short steps:
 
 **1. Create a Google Cloud project**

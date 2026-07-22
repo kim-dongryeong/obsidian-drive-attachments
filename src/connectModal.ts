@@ -84,7 +84,7 @@ export function renderConnectControls(
   hint.appendText("New to this? ");
   hint.createEl("a", {
     text: "See the setup guide",
-    href: "https://github.com/kim-dongryeong/obsidian-drive-attachments#setup",
+    href: "https://github.com/kim-dongryeong/obsidian-drive-attachments/blob/main/docs/setup-guide.md",
     attr: { target: "_blank", rel: "noopener" },
   });
 }
